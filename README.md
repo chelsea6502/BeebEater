@@ -39,6 +39,7 @@ No extra modifications are required. All you need to do is load `BeebEater.rom` 
  * **Commands that require graphics, such as `PLOT`.** Serial terminals do not support anything beyond ASCII characters.
  * **Commands that require sound, such as `SOUND`.** Sound requires a sound chip, which hasn't been covered yet by Ben Eater.
  * **Escape key while BASIC is outputting.** If you get stuck in a loop, you'll have to hardware reset.
+ * **Any ROM-based software written for the BBC Micro/Master.**
 
 # Requirements
 ## Hardware
