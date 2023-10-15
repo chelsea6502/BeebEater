@@ -16,7 +16,8 @@ Don’t have RS-232? You can connect the Rx and Tx pins to a Serial to USB conve
 I recommend CoolTerm as your serial monitor application. It’s free, open source, cross-platform, and natively handles backspace/delete. 
 
 Open ‘BeebEater_CoolTerm.cts’ inside CoolTerm, you’ll have all the settings you need preloaded!
-		
+
+  
 If you’d using some other non-CoolTerm serial monitor, you’ll need to make some changes to the settings:
  * 115200 baud rate, 8 data bits, no parity, 1 stop bit.
  * Enable handling of backspace/delete characters. Otherwise characters will not delete!
