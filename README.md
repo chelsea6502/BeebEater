@@ -9,12 +9,12 @@ _**BeebEater is designed for beginners. My goal for BeebEater is for it to be th
 
 # Features
 
-BeebEater features:
+**BeebEater features:**
  * **Small code base** - Less than 500 lines of assembly!
  * **Highly annotated** - Line by line comments to help you understand what's happening as much as possible!
  * **Extensible** - Designed to be easy for you to extend with your own features or custom configurations!
 
-BBC BASIC features:
+**BBC BASIC features:**
  * **Modern programming concepts** - BBC BASIC uses modern programming concepts such as `IF`, `WHILE`, `FOR` and even functions with `DEF PROC`!
  * **Built-in Assembler** - Supports executing assembly code. **That's right, you can program your 6502 USING your 6502!**
  * **Fast!** - BBC BASIC is famous for being one of the best perfoming BASIC interpreters for the 6502!
