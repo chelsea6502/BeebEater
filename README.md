@@ -36,6 +36,7 @@ No extra modifications are required. All you need to do is load `BeebEater.rom` 
 
 ## Unsupported features
  * **'Star commands' such as `*EDIT` and `*RUN`.** These are BBC Micro-specific commands, and aren't handled inside BASIC.
+ * **Time-based commands**, such as `TIME`, `TIMER` and `WAIT`.
  * **Commands that require graphics, such as `PLOT`.** Serial terminals do not support anything beyond ASCII characters.
  * **Commands that require sound, such as `SOUND`.** Sound requires a sound chip, which hasn't been covered yet by Ben Eater.
  * **Escape key while BASIC is outputting.** If you get stuck in a loop, you'll have to hardware reset.
@@ -78,6 +79,7 @@ If you want to make modifications to the code, you’ll need to assemble a new R
 
 Some rough plans for future versions:
 * Escape key support. Currently if you get stuck in a loop, you'll have to hardware reset.
+* Time-based commands using the 6522 VIA timers.
 * PS/2 Keyboard support.
 * LCD support
 * SAVE/LOAD programs by sending/recieving raw data though serial.
