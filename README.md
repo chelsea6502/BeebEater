@@ -78,7 +78,6 @@ If you want to make modifications to the code, you’ll need to assemble a new R
 
 Some rough plans for future versions:
 * Escape key support. Currently if you get stuck in a loop, you'll have to hardware reset.
-* Upgrade from BBC BASIC 4r32 to BBC BASIC V. BBC BASIC V has lots of improvements, such as CASE and WHILE commands!
 * PS/2 Keyboard support.
 * LCD support
 * SAVE/LOAD programs by sending/recieving raw data though serial.
