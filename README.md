@@ -13,7 +13,7 @@ BeebEater features:
  * **Extensible** - Designed to be easy for you to extend with your own features or custom configurations!
 
 BBC BASIC features:
- * **Modern programming concepts** BBC BASIC uses modern programming concepts such as `IF`, `WHILE`, `FOR` and even functions with `DEF PROC`!
+ * **Modern programming concepts** - BBC BASIC uses modern programming concepts such as `IF`, `WHILE`, `FOR` and even functions with `DEF PROC`!
  * **Built-in Assembler** - Supports executing assembly code. **That's right, you can program your 6502 USING your 6502!**
  * **Fast!** - BBC BASIC is famous for being one of the best perfoming BASIC interpreters for the 6502!
  * **Native video and sound commands** - While these aren't implemented by default, you have these at your disposal! No need to write custom BASIC commands!
