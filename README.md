@@ -5,7 +5,7 @@ This project came about due to a lack of a definitive BASIC interpreter for newc
 
 BBC BASIC is the BASIC interpreter found in the [BBC Micro Computer](https://en.wikipedia.org/wiki/BBC_Micro) from the 80s. It's considered by many to be the best BASIC interpreter ever made for the 6502!
 
-_**BeebEater is designed for beginners. My goal for BeebEater is for it to be the standard recommendation for beginners who ask "What OS should I install on my 6502?"**_
+_**BeebEater is designed for beginners. My goal for BeebEater is to be the standard recommendation for those who ask "What OS should I install on my 6502?"**_
 
 # Features
 
