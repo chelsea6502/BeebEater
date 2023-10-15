@@ -51,7 +51,7 @@ BeebEater assumes you have the [standard Ben Eater 6502 build](https://eater.net
 **Don’t have RS-232?** You can connect the Rx and Tx pins to a [Serial to USB converter](https://www.jaycar.com.au/duinotech-arduino-compatible-usb-to-serial-adaptor/p/XC4464) like I do.
 
 ## Serial monitor
-I recommend [**CoolTerm**](https://freeware.the-meiers.org) as your serial monitor application. It’s free, open source, cross-platform, and natively handles backspace/delete. Open `BeebEater_CoolTerm.cts` inside CoolTerm, you’ll have all the settings you need preloaded!
+I recommend [**CoolTerm**](https://freeware.the-meiers.org) as your serial monitor application. It’s free, open source, cross-platform, and natively handles backspace/delete. Open `BeebEater_CoolTerm.cts` inside CoolTerm, you’ll have all the settings you need preloaded.
 
 If you’d using some other non-CoolTerm serial monitor, you’ll need to make some changes to the settings:
  * 115200 baud rate, 8 data bits, no parity, 1 stop bit.
