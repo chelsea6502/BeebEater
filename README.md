@@ -1,6 +1,40 @@
 # BeebEater
 BeebEater is a port of BBC BASIC for the 6502. It’s fully compatible with the 6502 build from Ben Eater.
 
+This project came about due to a lack of a definitive BASIC interpreter for newcomers to 6502 homebrew computing.
+
+BBC BASIC is the BASIC interpreter found in the [BBC Micro Computer](https://en.wikipedia.org/wiki/BBC_Micro) from the 80s. It's considered by many to be the best BASIC interpreter ever made for the 6502!
+
+**BeebEater is designed for beginners. My goal for BeebEater is for it to be the standard recommendation for beginners who ask "What OS should I install on my 6502?"**
+
+BeebEater features:
+ * **Small code base** - Less than 500 lines of assembly!
+ * **Highly annotated** - Line by line comments to help you understand what's happening as much as possible!
+ * **Extensible** - Designed to be easy for you to extend with your own features or custom configurations!
+
+BBC BASIC features:
+ * **Modern programming concepts** BBC BASIC uses modern programming concepts such as `IF`, `WHILE`, `FOR` and even functions with `DEF PROC`!
+ * **Built-in Assembler** - Supports executing assembly code. **That's right, you can program your 6502 USING your 6502!**
+ * **Fast!** - BBC BASIC is famous for being one of the best perfoming BASIC interpreters for the 6502!
+ * **Native video and sound commands** - While these aren't implemented by default, you have these at your disposal! No need to write custom BASIC commands!
+
+# Features
+
+## What works
+ * **Output** from the ACIA to the serial terminal.
+ * **Input** from the serial terminal to the ACIA.
+ * BBC BASIC error handling.
+ * **Backspace/Delete** on current input.
+ * **Escape key** when inputting a command
+ * **The standard boot message** for the BBC Micro (hard-coded for now).
+ * (CoolTerm Only) **Clear the serial terminal screen** using `CLS`.
+
+## What doesn't work
+ * **'Star commands' such as `*EDIT` and `*RUN`.** These are BBC Micro-specific commands, and aren't handled inside BASIC.
+ * **Commands that require graphics, such as `PLOT`.** Serial terminals do not support anything beyond ASCII characters.
+ * **Commands that require sound, such as `SOUND`.** Sound requires a sound chip, which hasn't been covered yet by Ben Eater.
+ * **Escape key while BASIC is outputting.** If you get stuck in a loop, you'll have to hardware reset.
+
 # Requirements
 ## Hardware
 BeebEater assumes you have the [standard Ben Eater 6502 build](https://eater.net/6502), with the standard memory mapping:
@@ -34,6 +68,18 @@ If you have a standard Ben Eater 6502 memory mapping, everything is done for you
 If you want to make modifications to the code, you’ll need to compile it using VASM. Use the following VASM flags to generate a new ROM:
 	
 `/PATH/TO/vasm/vasm6502_oldstyle -Fbin -dotdir ./BeebEater.asm -c02 -o ./BeebEaterNew.rom`
+
+
+
+# Future plans
+
+Some rough plans for future versions:
+* Escape key support. Currently if you get stuck in a loop, you'll have to hardware reset.
+* Upgrade from BBC BASIC 4r32 to BBC BASIC V. BBC BASIC V supports modern concepts such as CASE and WHILE!
+* PS/2 Keyboard support.
+* Ability to interact with the LCD.
+* Emulate SAVE/LOAD commands to 'tape' by sending/recieving raw data though serial.
+
 
 # Special Thanks to…
  * **Ben Eater** - For inspiring me to get into computer hardware as a hobby!
