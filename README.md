@@ -1,4 +1,7 @@
 # BeebEater
+
+![Screenshot of BeebEater](/BeebEater_Screenshot.jpeg)
+
 BeebEater is a port of BBC BASIC for the 6502. It’s fully compatible with the 6502 build from Ben Eater.
 
 This project came about due to a lack of a definitive BASIC interpreter for newcomers to 6502 homebrew computing.
