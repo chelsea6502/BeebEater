@@ -230,7 +230,6 @@ Escape:
     RTS
 
 interrupt:
-    LDA $5000
     STA $FC ; save A
     PLA
     PHA ; Load the status flags into A so we can check them.
