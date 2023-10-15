@@ -25,7 +25,7 @@ No extra modifications are required. All you need to do is load `BeebEater.rom` 
  * **It's fast** - BBC BASIC is famous for being one of the best perfoming BASIC interpreters for the 6502.
  * **Native video and sound commands** - While these aren't implemented by default, you have native graphics and sounds commands at your disposal to build upon.
 
-## Features
+## Supported features
  * **Output** from the ACIA to the serial terminal.
  * **Input** from the serial terminal to the ACIA.
  * **Error handling** from BBC BASIC
