@@ -22,7 +22,7 @@ No extra modifications are required. All you need to do is load `BeebEater.rom` 
 **BBC BASIC features:**
  * **Modern programming concepts** - BBC BASIC uses modern programming concepts such as `IF`, `WHILE`, `FOR` and even functions with `DEF PROC`!
  * **Built-in Assembler** - Supports executing assembly code. **That's right, you can program your 6502 USING your 6502!**
- * **Fast!** - BBC BASIC is famous for being one of the best perfoming BASIC interpreters for the 6502!
+ * **It's fast** - BBC BASIC is famous for being one of the best perfoming BASIC interpreters for the 6502!
  * **Native video and sound commands** - While these aren't implemented by default, you have native commands to extend upon. No need to write custom BASIC commands!
 
 ## What works
