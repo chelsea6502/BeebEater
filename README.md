@@ -14,8 +14,8 @@ _**BeebEater is designed for beginners. My goal for BeebEater is to be the go-to
 
 **BeebEater features:**
  * **Small code base** - Less than 500 lines of assembly!
- * **Highly annotated** - Line by line comments to help you understand what's happening as much as possible!
- * **Extensible** - Designed to be easy for you to extend with your own features or custom configurations!
+ * **Highly annotated** - Line by line comments to help you understand what's happening as much as possible.
+ * **Extensible** - Designed to be easy for you to extend with your own features or custom configurations.
 
 **BBC BASIC features:**
  * **Modern programming concepts** - BBC BASIC uses modern programming concepts such as `IF`, `WHILE`, `FOR` and even functions with `DEF PROC`!
@@ -55,10 +55,10 @@ I recommend [**CoolTerm**](https://freeware.the-meiers.org) as your serial monit
 
 If you’d using some other non-CoolTerm serial monitor, you’ll need to make some changes to the settings:
  * 115200 baud rate, 8 data bits, no parity, 1 stop bit.
- * Enable handling of backspace/delete characters. Otherwise characters will not delete!
+ * Enable handling of backspace/delete characters. Otherwise characters will not delete.
  * Interpret the Enter/Return key as ‘CR’, not ‘CR+LF’. Otherwise your cursor will get misaligned.
  * Ignore the ‘Line Feed’ (LF) character. Otherwise, lines will have twice as much spacing.
-  * (Optional) Set the serial monitor to clear the screen when ‘0xFF’ is received. This means the `CLS` command will clear the screen!
+  * (Optional) Set the serial monitor to clear the screen when ‘0xFF’ is received. This means the `CLS` command will clear the screen.
 
 # Installation
 ## The quick way
@@ -72,13 +72,11 @@ If you want to make modifications to the code, you’ll need to compile it using
 	
 `/PATH/TO/vasm/vasm6502_oldstyle -Fbin -dotdir ./BeebEater.asm -c02 -o ./BeebEaterNew.rom`
 
-
-
 # Future plans
 
 Some rough plans for future versions:
 * Escape key support. Currently if you get stuck in a loop, you'll have to hardware reset.
-* Upgrade from BBC BASIC 4r32 to BBC BASIC V. BBC BASIC V supports modern concepts such as CASE and WHILE!
+* Upgrade from BBC BASIC 4r32 to BBC BASIC V. BBC BASIC V supports CASE and WHILE commands!
 * PS/2 Keyboard support.
 * Ability to interact with the LCD.
 * Emulate SAVE/LOAD commands to 'tape' by sending/recieving raw data though serial.
