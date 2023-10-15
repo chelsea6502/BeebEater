@@ -28,7 +28,7 @@ No complicated modifications are required. All you need to do is load `BeebEater
 ## What works
  * **Output** from the ACIA to the serial terminal.
  * **Input** from the serial terminal to the ACIA.
- * BBC BASIC error handling.
+ * **Error handling** from BBC BASIC
  * **Backspace/Delete** on current input.
  * **Escape key** when inputting a command
  * **The standard boot message** for the BBC Micro (hard-coded for now).
