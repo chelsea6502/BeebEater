@@ -3,12 +3,13 @@ BeebEater is a port of BBC BASIC for the 6502. It’s fully compatible with the 
 
 # Requirements
 BeebEater assumes you have the standard Ben Eater 6502 build, with the standard memory mapping:
-65C02 MPU with a 1Mhz clock
-32k ROM at $8000 to $FFFF
-16k RAM at $0000 to $3FFF
-6551 ACIA at $5000-5003, with a 1.8432 Mhz external crystal.
+ * 65C02 MPU with a 1Mhz clock
+ * 32k ROM at $8000 to $FFFF
+ * 16k RAM at $0000 to $3FFF
+ * 6551 ACIA at $5000-5003, with a 1.8432 Mhz external crystal.
 
 The 6522 VIA is optional. It’s not used anywhere in this code.
+
 Don’t have RS-232? You can connect the Rx and Tx pins to a Serial to USB converter like I do.
 
 # Serial monitor
@@ -35,7 +36,7 @@ If you want to make modifications to the code, you’ll need to compile it using
 `/PATH/TO/vasm/vasm6502_oldstyle -Fbin -dotdir ./BeebEater.asm -c02 -o ./BeebEaterNew.rom`
 
 # Special Thanks to…
-Ben Eater - For inspiring me to get into computer hardware as a hobby!
-Sophie Wilson - For single-handedly creating BBC BASIC, and for being such an inspiration to me!
-J.G Harston from mdfs.net - For supplying original BBC BASIC ROMs with annotated disassemblies
-Toby Nelson (tobyLobster) - For a highly-annotated disassembly of MOS 1.20!
+ * **Ben Eater** - For inspiring me to get into computer hardware as a hobby!
+ * **Sophie Wilson** - For single-handedly creating BBC BASIC, and for being such an inspiration to me!
+ * **J.G Harston** from mdfs.net - For supplying original BBC BASIC ROMs with annotated disassemblies
+ * **Toby Nelson** (tobyLobster) - For a highly-annotated disassembly of MOS 1.20!
