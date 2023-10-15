@@ -1,5 +1,6 @@
 ; BeebEater v0.1 - BBC BASIC for the Ben Eater 6502.
 ; by Chelsea Wilkinson (chelsea6502)
+; https://github.com/chelsea6502/BeebEater
 
 ; First, let's set some addresses...
 BASIC = $8000 ; the entry point for the BBC BASIC rom.
@@ -22,28 +23,30 @@ ACIA_CMD = $5002
 ACIA_CTRL = $5003
     
     .org BASIC  ; Set the start of the rom at $8000.
-    incbin "Basic2.rom" ; Only BBC BASIC II is supported for now.
+    incbin "Basic4r32.rom"  ; Import the binary file for BBC BASIC version 4r32. 
+                                ; Sourced from: https://mdfs.net/Software/BBCBasic/6502/ 
+    ; incbin "Basic2.rom" ; Running an old-school 6502 instead of the WDC 65C02? You'll have to use BBC BASIC II instead.
 
     .org START ; set the start of BeebEater at $C000.
 
 ; Let's hard-code in the boot messages. 
-bootMessage: ; The first part.
+bootMessage: ; The first part of the first line.
     .byte $0D ; This is the "Carriage Return" (CR) ASCII character. 
     .text "BBC Computer " ; Default value as it was on the original BBC Micro. Feel free to change this to whatever you want
     .byte $00 ; All strings must end with an ASCII NUL character.
 
-bootMessageRAM: ; The second part.
+bootMessageRAM: ; The second part of the first line.
     .text "16K" ; 16k for 16 kilobytes of RAM available. If you have more RAM, you'll have to update this manually.
     .byte $07 ; $07 is the ASCII 'Bell' character. This plays a sound in most serial monitors.
     .byte $00 ; End with NUL
 
-; Setup BeebEater. The RESET vectors of $FFFC and $FFFD point to here.
+; Setup BeebEater. The reset addresses of $FFFC and $FFFD point to here.
 reset:
     lda #$00 ; Soft reset the 6551 ACIA
     sta ACIA_STATUS
 
     ; Set the command register
-    lda #$0B ; no parity, no echo, no interrupts
+    lda #$0B ; no parity, no echo, no interrupts.
     sta ACIA_CMD
 
     ; Set the control register
@@ -56,7 +59,7 @@ reset:
     sta $020F ; Store it in $020F
     lda #<OSWRCH ; Load the lower two bytes of OSWRCH (EE)
     sta $020E ; Store it in $020F
-    ; fall through....
+    ; fall through to 'boot'
 boot: ; Setup and enter BBC BASIC
     LDA #>bootMessage ; Get the start address of where the first line of the boot message is.
     JSR printMessage ; Display the boot message.
@@ -96,17 +99,17 @@ printMessageLoop:
     RTS ; Return to where we were before 'printMessage' was called.
 
 OSRDCH:
-    lda ACIA_STATUS
-    and #$08
-    beq OSRDCH
-    lda ACIA_DATA
+    lda ACIA_STATUS ; Get the status of the ACIA
+    and #$08 ; Check if the 'Reciever Data Register Full' bit is 'Full'
+    beq OSRDCH ; If not, keep waiting.
+    lda ACIA_DATA ; Otherwise, get the character and store it into A.
     rts
 
 OSWRCHV:
     sta ACIA_DATA ; send the character
 WAIT_SETUP: ; OSWRCHV_WAIT is only needed for the Western Design Center (WDC) version of the 6551 ACIA, thanks to the famous UART bug.
 ; Assuming 1Mhz clock speed and 115200 baud rate, we need to loop WAIT_LOOP 18 times (#$12 in hex) before we can send the next character.
-; Real world wait times range from 1ms at 9600 baud, to 0.01 milliseconds at 115200 baud.
+; At 115200 baud, wait times are <0.01 milliseconds!
     PHX ; 3 clock cycles
     LDX #$12 ; Number of WAIT_LOOPs. Calculated by: ((1 / (baud rate)) * ((Clock rate in Hz) * 10) - 18) / 4
 WAIT_LOOP:
@@ -116,7 +119,7 @@ WAIT_LOOP:
 OSWRCHV_RETURN: ; make sure this is still included if have commented WAIT_SETUP and WAIT_LOOP out
     RTS ; 6 cycles
 
-OSBYTEV:
+OSBYTEV: 
     cmp #$84 ; Is it the 'read top of memory' system call?
     beq OSBYTE84 ; Put address '$4000' in YX registers.
     cmp #$83 ; Is it the 'read bottom of memory' system call?
@@ -135,17 +138,18 @@ OSBYTE83: ; Routine to return the lowest address of free RAM space.
     rts
 
 OSWORDV:
-	sei					; disable interrupts 
+	sei	            ; disable interrupts 
 	
     ; Load A, X, and Y registers by storing them into short-term memory.
 	sta	$EF	
 	stx	$F0				
 	sty	$F1				
 
-    cmp #$00            ; Is it the 'Read Line' system call?
-    beq OSWORD0V        ; If yes, start reading input from the user.
-    rts                 ; Otherwise, return with no change.
+    cmp #$00        ; Is it the 'Read Line' system call?
+    beq OSWORD0V    ; If yes, start reading input from the user.
+    rts             ; Otherwise, return with no change.
 OSWORD0V:
+    ; TODO: explain what a 'control block' is
     LDY #4
 osword0setup:
     ; store max/min ASCII codes, and max line length from zero page memory to main memory
@@ -171,26 +175,25 @@ osword0setup:
 readLineInputBufferFull:
     LDA #07 ; send a 'bell character'
 retryWithoutIncrement:
-    DEY ; decrement Y
+    DEY ; Decrement Y. We are essentially 'cancelling out' the next instruction.
 retryWithIncrement:
-    INY ; increment Y
+    INY ; Decrement Y. Y is currently holding the current position in the input.
 outputAndReadAgain:
-    JSR OSWRCH
-    ; fall through....
-
+    JSR OSWRCH ; Print the character. Fall through to 'readInputCharacter'
 readInputCharacter:
     JSR OSRDCH ; Get the next character from ACIA
 
-    CMP #$08 ; is it a backspace or DEL key? Let's delete
+    CMP #$08 ; Is it a backspace? Let's delete the last character.
     BEQ delete
-    CMP #$7F
+    CMP #$7F ; Is it a delete? Let's delete the last character.
+    BEQ delete
 
     BNE checkLowercase ; otherwise, move on
 delete:
     CPY #0 ; are we at the first character?
     BEQ readInputCharacter ; then do nothing
     DEY ; otherwise, go back 1
-    BCS outputAndReadAgain ; write the delete character
+    BCS outputAndReadAgain ; Write the delete character. Go bback to the start.
 
 checkLowercase: 
     CMP #$61        ; Compare with 'a'
@@ -227,13 +230,14 @@ Escape:
     RTS
 
 interrupt:
-    STA $FC
+    LDA $5000
+    STA $FC ; save A
     PLA
     PHA ; Load the status flags into A so we can check them.
-    AND #%00010000 ; Check if it's a BRK or an IRQ.
+    AND #$10 ; Check if it's a BRK or an IRQ.
     BNE BRKV ; If it's BRK, that's an error. Go to the BRK vector.
-IRQV:
-    rts ; otherwise, it's an IRQ. Return with nothing.
+IRQV: ; otherwise, it's an IRQ. Do nothing.
+    RTS
 
 BRKV:
     TXA             ; }
@@ -257,17 +261,16 @@ BRKV:
     rts
 
 
-
-
+    ; System Call vectors
     .org OSASCI
-    CMP #$0D
+    CMP #$0D ; Is it the 'enter' key? Jump to OSNEWL, otherwise fall through to OSWRCH.
     BNE OSWRCH
-   .org OSNEWL
-    LDA #$0A ; send CR
+   .org OSNEWL ; OSNEWL is essentially OSWRCH, but with a line break (CR+LF)
+    LDA #$0A ; Send 'Carriage Return' character.
     JSR OSWRCH
-    LDA #$0D ; send LF
+    LDA #$0D ; Send a 'Line Feed' character. CR+LF make up a complete line break.
     .org OSWRCH
-    JMP OSWRCHV
+    JMP OSWRCHV ; At address 'OSWRCH', jump to the 'OSWRCH' routine (AKA a 'vector').
 
     .org OSWORD
     jmp OSWORDV
