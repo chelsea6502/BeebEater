@@ -7,6 +7,8 @@ BBC BASIC is the BASIC interpreter found in the [BBC Micro Computer](https://en.
 
 _**BeebEater is designed for beginners. My goal for BeebEater is for it to be the standard recommendation for beginners who ask "What OS should I install on my 6502?"**_
 
+# Features
+
 BeebEater features:
  * **Small code base** - Less than 500 lines of assembly!
  * **Highly annotated** - Line by line comments to help you understand what's happening as much as possible!
@@ -17,8 +19,6 @@ BBC BASIC features:
  * **Built-in Assembler** - Supports executing assembly code. **That's right, you can program your 6502 USING your 6502!**
  * **Fast!** - BBC BASIC is famous for being one of the best perfoming BASIC interpreters for the 6502!
  * **Native video and sound commands** - While these aren't implemented by default, you have these at your disposal! No need to write custom BASIC commands!
-
-# Features
 
 ## What works
  * **Output** from the ACIA to the serial terminal.
