@@ -56,7 +56,7 @@ BeebEater assumes you have the [standard Ben Eater 6502 build](https://eater.net
 ## Serial monitor
 I recommend [**CoolTerm**](https://freeware.the-meiers.org) as your serial monitor application. It’s free, open source, cross-platform, and natively handles backspace/delete. Open `BeebEater_CoolTerm.cts` inside CoolTerm, you’ll have all the settings you need preloaded.
 
-If you’d using some other non-CoolTerm serial monitor, you’ll need to make some changes to the settings:
+If you’re using some other non-CoolTerm serial monitor, you’ll likely need to make some changes to the settings:
  * 115200 baud rate, 8 data bits, no parity, 1 stop bit.
  * Enable handling of backspace/delete characters. Otherwise characters will not delete.
  * Interpret the Enter/Return key as ‘CR’, not ‘CR+LF’. Otherwise your cursor will get misaligned.
