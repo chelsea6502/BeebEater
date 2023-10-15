@@ -25,7 +25,7 @@ No extra modifications are required. All you need to do is load `BeebEater.rom` 
  * **It's fast** - BBC BASIC is famous for being one of the best perfoming BASIC interpreters for the 6502.
  * **Native video and sound commands** - While these aren't implemented by default, you have native graphics and sounds commands at your disposal to build upon.
 
-## What works
+## Features
  * **Output** from the ACIA to the serial terminal.
  * **Input** from the serial terminal to the ACIA.
  * **Error handling** from BBC BASIC
@@ -34,7 +34,7 @@ No extra modifications are required. All you need to do is load `BeebEater.rom` 
  * **The standard boot message** for the BBC Micro (hard-coded for now).
  * (CoolTerm Only) **Clear the serial terminal screen** using `CLS`.
 
-## What doesn't work
+## Unsupported features
  * **'Star commands' such as `*EDIT` and `*RUN`.** These are BBC Micro-specific commands, and aren't handled inside BASIC.
  * **Commands that require graphics, such as `PLOT`.** Serial terminals do not support anything beyond ASCII characters.
  * **Commands that require sound, such as `SOUND`.** Sound requires a sound chip, which hasn't been covered yet by Ben Eater.
