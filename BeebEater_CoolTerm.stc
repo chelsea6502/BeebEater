@@ -1,4 +1,4 @@
-Port = usbserial-AQ035FWW
+Port = wlan-debug
 BaudRate = 115200
 DataBits = 8
 Parity = N
@@ -112,4 +112,4 @@ ChartTimeReference = ElapsedTime
 ChartXAxisScaleRatio = 1
 ChartTraceProperties = 0:Label=Trace 1	Color=&h000000FF	Style=0	Width=1	MStyle=8	Scale=0	Visible=True
 KeepOnTop = false
-WindowPosition = 379,146,700,480
+WindowPosition = 10,50,700,480
