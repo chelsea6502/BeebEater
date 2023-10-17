@@ -4,7 +4,7 @@
 
 BeebEater is a port of BBC BASIC for the 6502. It’s fully compatible with Ben Eater's 6502 breadboard computer build.
 
-I started this project because of the lack of easy, compatible, and fully featured operating systems for beginners to install on a 6502 homebrew computer.
+I started this project because of the lack of easy, portable, and fully featured operating systems for beginners to install on a 6502 homebrew computer.
 
 BBC BASIC is the BASIC interpreter found in the [BBC Micro Computer](https://en.wikipedia.org/wiki/BBC_Micro) from the 80s. It's considered by many to be the best BASIC interpreter ever made for the 6502!
 
