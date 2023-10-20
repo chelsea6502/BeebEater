@@ -84,6 +84,7 @@ Here's my rough plan for future versions:
  * v0.4 - PS/2 Keyboard
  * v0.5 - LCD
  * v1.0 - Bug fixes, code cleanup, optimisations.
+
 ...after this, I have no more major plans! 
 
 Feel free to suggest any other ideas to me. Note that I want to contain it to just the hardware that Ben Eater covers on his YouTube channel.
