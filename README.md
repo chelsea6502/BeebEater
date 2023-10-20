@@ -77,13 +77,16 @@ If you want to make modifications to the code, you’ll need to assemble a new R
 
 # Future plans
 
-Some rough plans for future versions:
-* Escape key support. Currently if you get stuck in a loop, you'll have to hardware reset.
-* Time-based commands using the 6522 VIA timers.
-* PS/2 Keyboard support.
-* LCD support
-* SAVE/LOAD programs by sending/recieving raw data though serial.
+Here's my rough plan for future versions:
+ * v0.2 - Esc handling
+ * v0.2.1 - Properly working pasting from serial terminal
+ * v0.3 - TIME, TIME$, TIMER, WAIT commands
+ * v0.4 - PS/2 Keyboard
+ * v0.5 - LCD
+ * v1.0 - Bug fixes, code cleanup, optimisations.
+...after this, I have no more major plans! 
 
+Feel free to suggest any other ideas to me. Note that I want to contain it to just the hardware that Ben Eater covers on his YouTube channel.
 
 # Special Thanks to…
  * **Ben Eater** - For inspiring me to get into computer hardware as a hobby!
