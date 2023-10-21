@@ -1,4 +1,4 @@
-Port = wlan-debug
+Port = usbserial-AQ035FWW
 BaudRate = 115200
 DataBits = 8
 Parity = N
@@ -64,10 +64,10 @@ CapturePath = /Applications
 TerminateSendString = false
 TerminationString = 0D 0A
 TXCharDelayEnabled = true
-TXCharDelay = 10000
-TXLineDelayEnabled = false
-TXLineDelay = 10000
-TXLineDelayChars = 0A
+TXCharDelay = 3000
+TXLineDelayEnabled = true
+TXLineDelay = 50000
+TXLineDelayChars = 0D
 TXLineDelayMatchAllChars = false
 TXPacketDelayEnabled = false
 TXPacketDelay = 3000
@@ -112,4 +112,4 @@ ChartTimeReference = ElapsedTime
 ChartXAxisScaleRatio = 1
 ChartTraceProperties = 0:Label=Trace 1	Color=&h000000FF	Style=0	Width=1	MStyle=8	Scale=0	Visible=True
 KeepOnTop = false
-WindowPosition = 10,50,700,480
+WindowPosition = 335,225,700,480
