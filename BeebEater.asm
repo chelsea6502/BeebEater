@@ -42,23 +42,23 @@ bootMessageRAM: ; The second part of the first line.
 
 ; Setup BeebEater. The reset addresses of $FFFC and $FFFD point to here.
 reset:
-    lda #$00 ; Soft reset the 6551 ACIA
-    sta ACIA_STATUS
+    LDA #$00 ; Soft reset the 6551 ACIA
+    STA ACIA_STATUS
 
     ; Set the command register
-    lda #$0B ; no parity, no echo, no interrupts.
-    sta ACIA_CMD
+    LDA #$09 ; no parity, no echo, with recieve interrupts.
+    STA ACIA_CMD
 
     ; Set the control register
-    lda #$10 ; 1 stop bit, 8 bits, 16x baud (Baud rate of 115200)
-    sta ACIA_CTRL
+    LDA #$10 ; 1 stop bit, 8 bits, 16x baud (Baud rate of 115200)
+    STA ACIA_CTRL
 
     ; BBC BASIC stores the address of the 'write character' routine at $020E for quick access.
     ; Let's tell BBC BASIC where it is.
-    lda #>OSWRCH ; Get the upper two bytes of OSWRCH (FF)
-    sta $020F ; Store it in $020F
-    lda #<OSWRCH ; Load the lower two bytes of OSWRCH (EE)
-    sta $020E ; Store it in $020F
+    LDA #>OSWRCH ; Get the upper two bytes of OSWRCH (FF)
+    STA $020F ; Store it in $020F
+    LDA #<OSWRCH ; Load the lower two bytes of OSWRCH (EE)
+    STA $020E ; Store it in $020F
     ; fall through to 'boot'
 boot: ; Setup and enter BBC BASIC
     LDA #>bootMessage ; Get the start address of where the first line of the boot message is.
@@ -99,14 +99,27 @@ printMessageLoop:
     RTS ; Return to where we were before 'printMessage' was called.
 
 OSRDCH:
-    lda ACIA_STATUS ; Get the status of the ACIA
-    and #$08 ; Check if the 'Reciever Data Register Full' bit is 'Full'
-    beq OSRDCH ; If not, keep waiting.
-    lda ACIA_DATA ; Otherwise, get the character and store it into A.
-    rts
+    ; check for escape flag
+    LDA #0
+    BIT $FF ; if the escape flag set?
+    BMI escapeCondition
+    LDA $3E09 ; is there something in the buffer?
+    CMP #0 ; is the buffer empty?
+    BEQ OSRDCH ; If not, keep waiting.
+    PHA ; save A
+    LDA #0
+    STA $3E09 ; clear the character buffer
+    PLA ; restore A
+    RTS ; return
+escapeCondition:
+    LDA #0
+    STA $3E09 ; clear the character buffer
+    SEC ; set carry bit, which BASIC reads as the escape condition
+    LDA #$1B ; load escape into A
+    RTS
 
 OSWRCHV:
-    sta ACIA_DATA ; send the character
+    STA ACIA_DATA ; send the character
 WAIT_SETUP: ; OSWRCHV_WAIT is only needed for the Western Design Center (WDC) version of the 6551 ACIA, thanks to the famous UART bug.
 ; Assuming 1Mhz clock speed and 115200 baud rate, we need to loop WAIT_LOOP 18 times (#$12 in hex) before we can send the next character.
 ; At 115200 baud, wait times are <0.01 milliseconds!
@@ -120,35 +133,55 @@ OSWRCHV_RETURN: ; make sure this is still included if have commented WAIT_SETUP 
     RTS ; 6 cycles
 
 OSBYTEV: 
-    cmp #$84 ; Is it the 'read top of memory' system call?
-    beq OSBYTE84 ; Put address '$4000' in YX registers.
-    cmp #$83 ; Is it the 'read bottom of memory' system call?
-    beq OSBYTE83 ; Put address '$0080' in YX registers.
-    rts ; Otherwise, return with nothing. 
+    CMP #$7E ; is it the 'acknowledge escape' system call?
+    BEQ OSBYTE7E
+    CMP #$84 ; Is it the 'read top of memory' system call?
+    BEQ OSBYTE84 ; Put address '$4000' in YX registers.
+    CMP #$83 ; Is it the 'read bottom of memory' system call?
+    BEQ OSBYTE83 ; Put address '$0080' in YX registers.
+    RTS ; Otherwise, return with nothing. 
     ; There are much more OSBYTE system calls, but we don't need to implement these for now.
 
+OSBYTE7E:
+    LDA #0
+    LDX #0                                              ; X=0
+    BIT $FF                                     ; check for ESCAPE flag
+    BPL osbyte124                               ; if (no ESCAPE flag) then branch (just clear the ESCAPE condition)
+    LDA $0276                                  ; get ESCAPE effects
+    BNE noEscapeEffects                              ; if (escape effects is non-zero)
+    CLI                                                 ; allow interrupts
+noEscapeEffects:
+    LDX #$FF                                            ; X=$FF to indicate ESCAPE acknowledged
+osbyte124:
+    CLC                                                 ; clear carry
+osbyte125:
+    ROR $FF                                     ; set/clear bit 7 of ESCAPE flag
+    RTS                                                 ;
+
 OSBYTE84: ; Routine to return the highest address of free RAM space.
-    ldy #$40 ; Put address '$4000' in YX registers.
-    ldx #$00
+    LDY #$40 ; Put address '$4000' in YX registers.
+    LDX #$00
     rts
 
 OSBYTE83: ; Routine to return the lowest address of free RAM space.
-    ldy #$08 ; Put address '$0800' in YX registers. Anything below $0800 is memory space reserved by BBC Basic.
-    ldx #$00
+    LDY #$08 ; Put address '$0800' in YX registers. Anything below $0800 is memory space reserved by BBC Basic.
+    LDX #$00
     rts
 
 OSWORDV:
-	sei	            ; disable interrupts 
+	SEI	            ; disable interrupts 
 	
     ; Load A, X, and Y registers by storing them into short-term memory.
-	sta	$EF	
-	stx	$F0				
-	sty	$F1				
+	STA	$EF	
+	STX	$F0				
+	STY	$F1				
 
-    cmp #$00        ; Is it the 'Read Line' system call?
-    beq OSWORD0V    ; If yes, start reading input from the user.
-    rts             ; Otherwise, return with no change.
+    CMP #$00        ; Is it the 'Read Line' system call?
+    BEQ OSWORD0V    ; If yes, start reading input from the user.
+    RTS             ; Otherwise, return with no change.
 OSWORD0V:
+    STA $3E09 ; Write a '0' to the character buffer, in case there's an escape character currently in there. Kind of a hacky solution, but it works!
+
     ; TODO: explain what a 'control block' is
     LDY #4
 osword0setup:
@@ -208,8 +241,9 @@ notLower:
     BEQ newLineAndExit ; then finish
 
     CMP #$1B ; is it the escape key?
-    BEQ Escape ; end early
+    BEQ Escape
 
+continueRead:
     CPY $02B3 ; check current length against max word length
     BCS readLineInputBufferFull ; send a bell character if full
 
@@ -231,12 +265,22 @@ Escape:
 
 interrupt:
     STA $FC ; save A
-    PLA
-    PHA ; Load the status flags into A so we can check them.
+    PLA ; get status register. it's on the stack at this point
+    PHA ; put the status flags back on the stack
     AND #$10 ; Check if it's a BRK or an IRQ.
     BNE BRKV ; If it's BRK, that's an error. Go to the BRK vector.
-IRQV: ; otherwise, it's an IRQ. Do nothing.
-    RTS
+IRQV: ; otherwise, it's an IRQ.
+    LDA ACIA_STATUS
+    CMP #$88
+    LDA ACIA_DATA ; read the ACIA. Because reading the ACIA clears the data, this is the only place allowed to read it directly!
+    STA $3E09 ; For everywhere else that needs to access the character, we will store in memory.
+    CMP #$1B ; check if an escape key was pressed
+    BNE notEscape
+    LDA #$FF
+    STA $FF ; set the 'escape flag' address at $FF to the value #$FF.
+notEscape:
+    LDA $FC ; restore A
+    RTI
 
 BRKV:
     TXA             ; }
@@ -257,7 +301,7 @@ BRKV:
     PLA             ;get back original value of X
     TAX                                                 
     JMP ($0202)     ; Call BBC BASIC's error handler. It's address is stored in $0202
-    rts
+    RTS
 
 
     ; System Call vectors
@@ -272,10 +316,10 @@ BRKV:
     JMP OSWRCHV ; At address 'OSWRCH', jump to the 'OSWRCH' routine (AKA a 'vector').
 
     .org OSWORD
-    jmp OSWORDV
+    JMP OSWORDV
 
     .org OSBYTE
-    jmp OSBYTEV
+    JMP OSBYTEV
 
     .org NMI
     .word interrupt ; at NMI, go to interrupt handler
