@@ -6,12 +6,17 @@
 BASIC = $8000 ; the entry point for the BBC BASIC rom.
 START = $C000 ; the entry point for BeebEater
 
+; BeebEater-specific memory addresses. $00-5F is reserved for BBC BASIC!
+READBUFFER = $60 ; this stores the latest ASCII character that was sent into the ACIA
+
 ; Next, let's define the 'OS Calls'. These calls are how BBC BASIC interacts with hardware.
-OSASCI = $FFE3
-OSNEWL = $FFE7
-OSWRCH = $FFEE
-OSWORD = $FFF1
-OSBYTE = $FFF4
+OSASCI = $FFE3 ; "OS ASCII"
+OSNEWL = $FFE7 ; "OS New Line"
+OSWRCH = $FFEE ; "OS Write Character"
+OSWORD = $FFF1 ; "OS Word"
+OSBYTE = $FFF4 ; "OS Byte"
+
+TICKS = $0292 ; 
 
 ; 6502-specific addresses
 NMI = $FFFA
@@ -21,11 +26,25 @@ ACIA_DATA = $5000
 ACIA_STATUS = $5001
 ACIA_CMD = $5002
 ACIA_CTRL = $5003
+
+; Set VIA labels
+;PORTB = $6000
+;PORTA = $6001
+;DDRB = $6002
+;DDRA = $6003
+T1CL = $6004
+T1CH = $6005
+ACR = $600B
+;IFR = $600D
+IER = $600E
     
     .org BASIC  ; Set the start of the rom at $8000.
     incbin "Basic4r32.rom"  ; Import the binary file for BBC BASIC version 4r32. 
-                                ; Sourced from: https://mdfs.net/Software/BBCBasic/6502/ 
+                                ; Sourced from: https://mdfs.net/Software/BBCBasic/6502/
+                                ; Download the one from the "Acorn BBC Master" section.
     ; incbin "Basic2.rom" ; Running an old-school 6502 instead of the WDC 65C02? You'll have to use BBC BASIC II instead.
+                                ; Sourced from: https://mdfs.net/Software/BBCBasic/6502/
+                                ; Download the one from the "Acorn BBC Microcomputer" section.
 
     .org START ; set the start of BeebEater at $C000.
 
@@ -53,6 +72,25 @@ reset:
     LDA #$10 ; 1 stop bit, 8 bits, 16x baud (Baud rate of 115200)
     STA ACIA_CTRL
 
+    ; timers
+    LDA #$00
+    STA TICKS ; reset the timers
+    STA TICKS + 1
+    STA TICKS + 2
+    STA TICKS + 3
+    STA TICKS + 4
+
+    LDA #%01000000
+    STA ACR ; timed interrupt every time it's loaded. 'one shot mode'
+
+    LDA #$0E ; set timer to trigger an interrupt every 10 milliseconds (1 centisecond)
+    STA T1CL
+    LDA #$27
+    STA T1CH
+
+    LDA #%11000000
+    STA IER ; set IRQ for every time timer 1 runs out
+
     ; BBC BASIC stores the address of the 'write character' routine at $020E for quick access.
     ; Let's tell BBC BASIC where it is.
     LDA #>OSWRCH ; Get the upper two bytes of OSWRCH (FF)
@@ -60,6 +98,8 @@ reset:
     LDA #<OSWRCH ; Load the lower two bytes of OSWRCH (EE)
     STA $020E ; Store it in $020F
     ; fall through to 'boot'
+    
+
 boot: ; Setup and enter BBC BASIC
     LDA #>bootMessage ; Get the start address of where the first line of the boot message is.
     JSR printMessage ; Display the boot message.
@@ -78,6 +118,8 @@ boot: ; Setup and enter BBC BASIC
     ; Print two line breaks to have a one line gap from the command prompt (The '>')
     JSR OSNEWL
     JSR OSNEWL
+
+    CLI ; enable interrupts
 
     LDA #$01 ; Load '1' into the accumulator to tell BBC BASIC we want to enter the start of the ROM.
     JMP BASIC ; Enter BBC BASIC!
@@ -103,17 +145,17 @@ OSRDCH:
     LDA #0
     BIT $FF ; if the escape flag set?
     BMI escapeCondition
-    LDA $3E09 ; is there something in the buffer?
+    LDA READBUFFER ; is there something in the buffer?
     CMP #0 ; is the buffer empty?
     BEQ OSRDCH ; If not, keep waiting.
     PHA ; save A
     LDA #0
-    STA $3E09 ; clear the character buffer
+    STA READBUFFER ; clear the character buffer
     PLA ; restore A
     RTS ; return
 escapeCondition:
     LDA #0
-    STA $3E09 ; clear the character buffer
+    STA READBUFFER ; clear the character buffer
     SEC ; set carry bit, which BASIC reads as the escape condition
     LDA #$1B ; load escape into A
     RTS
@@ -178,9 +220,13 @@ OSWORDV:
 
     CMP #$00        ; Is it the 'Read Line' system call?
     BEQ OSWORD0V    ; If yes, start reading input from the user.
+    CMP #$01        ; Is it the 'Read Clock' system call?
+    BEQ OSWORD1V    ; 
+    CMP #$02        ; Is it the 'Write Clock' system call?
+    BEQ OSWORD2V    ; 
     RTS             ; Otherwise, return with no change.
 OSWORD0V:
-    STA $3E09 ; Write a '0' to the character buffer, in case there's an escape character currently in there. Kind of a hacky solution, but it works!
+    STA READBUFFER ; Write a '0' to the character buffer, in case there's an escape character currently in there. Kind of a hacky solution, but it works!
 
     ; TODO: explain what a 'control block' is
     LDY #4
@@ -214,7 +260,7 @@ retryWithIncrement:
 outputAndReadAgain:
     JSR OSWRCH ; Print the character. Fall through to 'readInputCharacter'
 readInputCharacter:
-    JSR OSRDCH ; Get the next character from ACIA
+    JSR OSRDCH ; Read the next character from ACIA
 
     CMP #$08 ; Is it a backspace? Let's delete the last character.
     BEQ delete
@@ -263,6 +309,29 @@ newLineAndExit:
 Escape:
     RTS
 
+OSWORD1V:
+    LDX #5                              
+readTimer:
+    LDY #4 
+readTimerLoop:
+    LDA TICKS - 5,X                               
+    STA ($F0),Y                                   
+    INX                                                
+    DEY                                                 
+    BPL readTimerLoop
+    RTS
+
+OSWORD2V:
+    LDX #5   
+    LDY #4
+writeTimerLoop:
+    LDA ($F0),Y
+    STA TICKS - 5, X
+    INX
+    DEY
+    BPL writeTimerLoop
+    RTS
+
 interrupt:
     STA $FC ; save A
     PLA ; get status register. it's on the stack at this point
@@ -271,14 +340,27 @@ interrupt:
     BNE BRKV ; If it's BRK, that's an error. Go to the BRK vector.
 IRQV: ; otherwise, it's an IRQ.
     LDA ACIA_STATUS
-    CMP #$88
+    AND #$88
+    BEQ VIA_TICK
     LDA ACIA_DATA ; read the ACIA. Because reading the ACIA clears the data, this is the only place allowed to read it directly!
-    STA $3E09 ; For everywhere else that needs to access the character, we will store in memory.
+    STA READBUFFER ; For everywheref else that needs to access the character, we will store in memory.
     CMP #$1B ; check if an escape key was pressed
-    BNE notEscape
+    BNE end_irq
     LDA #$FF
     STA $FF ; set the 'escape flag' address at $FF to the value #$FF.
-notEscape:
+    JMP end_irq
+VIA_TICK:
+    LDA T1CL ; clear the interrupt by reading the timer. BIT is the easiest way
+    INC TICKS + 4
+    BNE end_irq
+    INC TICKS + 3
+    BNE end_irq
+    INC TICKS + 2
+    BNE end_irq
+    INC TICKS + 1
+    BNE end_irq
+    INC TICKS
+end_irq:
     LDA $FC ; restore A
     RTI
 
