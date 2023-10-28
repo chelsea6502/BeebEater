@@ -71,6 +71,14 @@ bootMessageRAM: ; The second part of the first line.
 ; Setup BeebEater. The reset addresses of $FFFC and $FFFD point to here.
 ; Let's set any hardware-specific things here.
 reset:
+    ; Clear registers
+    LDA #0
+    PHA ; Push A onto the stack
+    PLP ; PLP = "Pull status from stack". This essentially resets the status flags to 0.
+    LDX #0
+    LDY #0
+    JSR wipe_ram ; Let's clear all the RAM and start fresh
+
     ; --- ACIA 6551 Initialisation ---
 
     LDA #$00 ; Soft reset the 6551 ACIA by writing 0 to the status register.
@@ -454,6 +462,25 @@ BRKV:
     JMP ($0202)     
     RTS ; The error handler will return us to here. From there, let's return to where we were before the BRK.
 
+wipe_ram:
+        PHA ; Save A register (Accumulator)
+        PHX ; Save X register
+        PHY ; Save Y register
+        LDA #$00
+        LDX #$00       ; Start with the low byte of the address at $00
+        LDY #$00       ; Start with the high byte of the address at $00
+wipe_ram_loop:
+        STA ($00,X)    ; Store the accumulator (which is already 0) to the effective address
+        INX            ; Increment the low byte
+        BNE no_incy    ; If the low byte is not 0 (no overflow), skip the Y increment
+        INY            ; Increment the high byte
+no_incy:
+        CPY #$40       ; Check if we've reached past $3FFF
+        BNE wipe_ram_loop ; If we haven't, continue the loop
+        PLY ; Restore Y register
+        PLX ; Restore X register
+        PLA ; Restore A register
+        RTS
 
     ; BBC BASIC system calls. BBC BASIC calls these by jumping to their place in memory.
     ; Most of them jump to a 'vector' that properly handles the system call.
