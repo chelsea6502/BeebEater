@@ -1,4 +1,4 @@
-; BeebEater v0.2 - BBC BASIC for the Ben Eater 6502.
+; BeebEater v0.2.1 - BBC BASIC for the Ben Eater 6502.
 ; by Chelsea Wilkinson (chelsea6502)
 ; https://github.com/chelsea6502/BeebEater
 
