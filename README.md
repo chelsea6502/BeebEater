@@ -74,7 +74,7 @@ If you want to make modifications to the code, you’ll need to assemble a new R
 # Future plans
 
 Here's my rough plan for future versions:
- * v0.3 - LCD display
+ * v0.3 - LCD display (see "LCD" branch if you're impatient)
  * v0.4 - PS/2 Keyboard
  * v1.0 - Official final release: Bug fixes, code cleanups, optimisations.
  * v2.0 - SAVE/LOAD contents of RAM into ROM?
