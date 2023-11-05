@@ -85,24 +85,58 @@ interrupt:
     and #RELEASE
     beq read_key ; move on if we are not releasing a key
 
+    ; clear the release bit
     lda kb_flags
     eor #RELEASE
     sta kb_flags
     lda PORTA ; read to clear the interrupt
+    
+    cmp #$12 ; is it the left shift?
+    beq shift_up ; clear the shift flag
+    cmp #$59 ; is it the left shift?
+    beq shift_up ; clear the shift flag
+    
+    jmp exit
+
+shift_up:
+    lda kb_flags
+    eor #SHIFT
+    sta kb_flags
     jmp exit
 
 read_key:
   lda PORTA
   cmp #$F0
   beq key_release
+
+    cmp #$12 ; check if we pressed the left shift key
+    beq shift_down ; set the shift flag
+    cmp #$59 ; right shift
+    beq shift_down ; set the  shift flag
+
   tax
+  lda kb_flags
+  and #SHIFT
+  bne shifted_key
+
   lda keymap,X
+    jmp push_key
+
+shifted_key:
+    lda keymap_shifted,X
+    jmp push_key
 
 push_key:
   ldx kb_wptr
   sta kb_buffer, X
   inc kb_wptr
   jmp exit
+
+shift_down:
+    lda kb_flags
+    ora #SHIFT
+    sta kb_flags
+    jmp exit
 
 key_release:
   lda kb_flags
