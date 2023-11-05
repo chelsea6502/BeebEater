@@ -78,6 +78,8 @@ bootMessageRAM: ; The second part of the first line.
 ; Setup BeebEater. The reset addresses of $FFFC and $FFFD point to here.
 ; Let's set any hardware-specific things here.
 reset:
+    SEI
+
     ; Clear registers
     LDA #0
     PHA ; Push A onto the stack
@@ -87,6 +89,9 @@ reset:
     JSR wipe_ram ; Let's clear all the RAM and start fresh
 
     ; --- ACIA 6551 Initialisation ---
+
+    LDA #$00
+    STA DDRA
 
     LDA #$00 ; Soft reset the 6551 ACIA by writing 0 to the status register.
     STA ACIA_STATUS
