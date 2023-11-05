@@ -438,7 +438,7 @@ IRQ_ACIA:
     STA READBUFFER ; For everywhere else that needs to access the character, we will store in memory.
     CMP #$1B ; check if an escape key was pressed
     BNE end_irq ; If it's not an escape key, we've done everything we need. Skip to the end.
-IRQ_ACIA_ESCAPE: ; If an escape key was pressed, let's set the escape flag.
+IRQ_ESCAPE: ; If an escape key was pressed, let's set the escape flag.
     LDA #$FF
     STA $FF ; set the 'escape flag' address at $FF to the value #$FF.
     JMP end_irq ; Skip to the end.
@@ -517,7 +517,14 @@ shifted_key:
     jmp push_key
 
 push_key:
+    PHA
   sta READBUFFER
+    PLA
+  CMP #$1B
+  BNE keyboard_interrupt_exit
+  LDA #$FF
+  STA $FF ; set the 'escape flag' address at $FF to the value #$FF.
+
   jmp keyboard_interrupt_exit
 
 shift_down:
