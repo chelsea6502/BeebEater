@@ -8,6 +8,10 @@ START = $C000 ; the entry point for BeebEater
 
 ; BeebEater-specific memory addresses. $00-5F is reserved for BBC BASIC!
 READBUFFER = $60 ; this stores the latest ASCII character that was sent into the ACIA
+kb_flags = $61
+
+RELEASE = %00000001
+SHIFT   = %00000010
 
 ; Next, let's define the 'OS Calls'. These calls are how BBC BASIC interacts with hardware.
 OSASCI = $FFE3 ; "OS ASCII" - Print an ASCII character stored in Register A (Accumulator)
@@ -18,6 +22,8 @@ OSBYTE = $FFF4 ; "OS Byte" - A group of system calls that have inputs of only on
 
 ; These are BBC BASIC-specific locations in memory. These locations are defined by BBC BASIC.
 TICKS = $0292 ; A 5-byte memory location ($0292-$0296) that counts the number of 'centiseconds' since booting up. We use this this for the TIME command.
+
+
 
 ; 6502-specific addresses
 NMI = $FFFA ; This is the entry point for when we trigger a 'Non-Maskable Interupt'. 
@@ -33,13 +39,14 @@ ACIA_CTRL = $5003 ; Control register
 ; Next, let's define where the VIA is. $6000 is the default for Ben Eater.
 ; Right now we only use the VIA for timers. We'll use the ports for future versions.
 ;PORTB = $6000
-;PORTA = $6001
+PORTA = $6001
 ;DDRB = $6002 ; "Data Direction Register B"
-;DDRA = $6003 ; "Data Direction Register A"
+DDRA = $6003 ; "Data Direction Register A"
 T1CL = $6004 ; "Timer 1 Counter Low"
 T1CH = $6005 ; "Timer 1 Counter High"
 ACR = $600B ; "Auxiliary Control Register"
-;IFR = $600D ; "Interrupt Flag Register"
+PCR = $600c ; [program control register?]
+IFR = $600D ; "Interrupt Flag Register"
 IER = $600E ; "Interrupt Enable Register"
     
     .org BASIC  ; Set the start of the rom at $8000.
@@ -106,6 +113,13 @@ reset:
     STA T1CL
     LDA #$27
     STA T1CH
+
+    ; set VIA to send interrupt on rising edge of CA1 
+    lda #$01
+    sta PCR
+    ;lda #$82
+    lda #$C2
+    sta IER
 
     ; Initialise the 'Interrupt Enable Register (IER)'.
     ; WARNING: Ben Eater wires the ACIA IRQ to the 6502 IRQ. This means that timers will stop counting if interrupts are disabled with 'SEI' at any point!
@@ -408,11 +422,12 @@ interrupt:
     PLA ; get status register. it's on the stack at this point
     PHA ; put the status flags back on the stack
     AND #$10 ; Check if it's a BRK or an IRQ.
-    BNE BRKV ; If it's BRK, that's an error. Go to the BRK vector.
+    BEQ IRQV 
+    JMP BRKV ; If it's BRK, that's an error. Go to the BRK vector.
 IRQV: ; Otherwise, it's an IRQ. Let's check what caused the interrupt, starting with the ACIA.
     LDA ACIA_STATUS
     AND #$88 ; Check the ACIA status register to find out if the ACIA is asking to read a character.
-    BEQ IRQ_VIA_TICK ; If there's nothing to read, then the VIA timer probably caused it.
+    BEQ IRQ_KEYBOARD ; If there's nothing to read, then we'll try the keyboard
 IRQ_ACIA:
     LDA ACIA_DATA ; Read the ACIA. Because reading the ACIA clears the data, this is the only place allowed to read it directly!
     STA READBUFFER ; For everywhere else that needs to access the character, we will store in memory.
@@ -422,6 +437,12 @@ IRQ_ACIA_ESCAPE: ; If an escape key was pressed, let's set the escape flag.
     LDA #$FF
     STA $FF ; set the 'escape flag' address at $FF to the value #$FF.
     JMP end_irq ; Skip to the end.
+IRQ_KEYBOARD: ; If we've ruled out the ACIA, then let's try the keyboard
+    LDA IFR
+    AND #%00000010
+    BEQ IRQ_VIA_TICK
+    JSR keyboard_interrupt
+    jmp end_irq
 IRQ_VIA_TICK: ; If we've ruled out the ACIA, then let's assume it was the VIA timer.
     LDA T1CL ; Clear the interrupt by reading the timer.
     INC TICKS + 4 ; Increment the 4th byte, which holds the lowest byte.
@@ -433,9 +454,83 @@ IRQ_VIA_TICK: ; If we've ruled out the ACIA, then let's assume it was the VIA ti
     INC TICKS + 1
     BNE end_irq
     INC TICKS
+
 end_irq:
     LDA $FC ; Restore what was in the A register before we were so rudely interrupted
     RTI ; "ReTurn from Interrupt"
+
+
+keyboard_interrupt:
+  pha
+  txa
+  pha
+
+    ;first, check if we are releasing a key
+    lda kb_flags
+    and #RELEASE
+    beq read_key ; move on if we are not releasing a key
+
+    ; clear the release bit
+    lda kb_flags
+    eor #RELEASE
+    sta kb_flags
+    lda PORTA ; read to clear the interrupt
+    
+    cmp #$12 ; is it the left shift?
+    beq shift_up ; clear the shift flag
+    cmp #$59 ; is it the left shift?
+    beq shift_up ; clear the shift flag
+    
+    jmp keyboard_interrupt_exit
+
+shift_up:
+    lda kb_flags
+    eor #SHIFT
+    sta kb_flags
+    jmp keyboard_interrupt_exit
+
+read_key:
+  lda PORTA
+  cmp #$F0
+  beq key_release
+
+    cmp #$12 ; check if we pressed the left shift key
+    beq shift_down ; set the shift flag
+    cmp #$59 ; right shift
+    beq shift_down ; set the  shift flag
+
+  tax
+  lda kb_flags
+  and #SHIFT
+  bne shifted_key
+
+  lda keymap,X
+    jmp push_key
+
+shifted_key:
+    lda keymap_shifted,X
+    jmp push_key
+
+push_key:
+  sta READBUFFER
+  jmp keyboard_interrupt_exit
+
+shift_down:
+    lda kb_flags
+    ora #SHIFT
+    sta kb_flags
+    jmp keyboard_interrupt_exit
+
+key_release:
+  lda kb_flags
+  ora #RELEASE
+  sta kb_flags
+
+keyboard_interrupt_exit:
+    pla
+    tax
+    pla
+    rts
 
 ; Handler for interrupts that we know were called by the BRK instruction. This likely means that there was an error called by BBC BASIC.
 ; BBC BASIC has a way of telling us the error message. To get the message, we need to store the location of the error message into addresses $FD and $FE. 
@@ -481,6 +576,43 @@ no_incy:
         PLX ; Restore X register
         PLA ; Restore A register
         RTS
+
+ .org $fd00
+keymap:
+  .byte "????????????? `?" ; 00-0F
+  .byte "?????q1???zsaw2?" ; 10-1F
+  .byte "?cxde43?? vftr5?" ; 20-2F
+  .byte "?nbhgy6???mju78?" ; 30-3F
+  .byte "?,kio09??./l;p-?" ; 40-4F
+  .byte "??'?[=????",$0a,"]?\??" ; 50-5F
+  .byte "?????????1?47???" ; 60-6F
+  .byte "0.2568",$1b,"??+3-*9??" ; 70-7F
+  .byte "????????????????" ; 80-8F
+  .byte "????????????????" ; 90-9F
+  .byte "????????????????" ; A0-AF
+  .byte "????????????????" ; B0-BF
+  .byte "????????????????" ; C0-CF
+  .byte "????????????????" ; D0-DF
+  .byte "????????????????" ; E0-EF
+  .byte "????????????????" ; F0-FF
+keymap_shifted:
+  .byte "????????????? ~?" ; 00-0F
+  .byte "?????Q!???ZSAW@?" ; 10-1F
+  .byte "?CXDE#$?? VFTR%?" ; 20-2F
+  .byte "?NBHGY^???MJU&*?" ; 30-3F
+  .byte "?<KIO)(??>?L:P_?" ; 40-4F
+  .byte '??"?{+?????}?|??' ; 50-5F
+  .byte "?????????1?47???" ; 60-6F
+  .byte "0.2568???+3-*9??" ; 70-7F
+  .byte "????????????????" ; 80-8F
+  .byte "????????????????" ; 90-9F
+  .byte "????????????????" ; A0-AF
+  .byte "????????????????" ; B0-BF
+  .byte "????????????????" ; C0-CF
+  .byte "????????????????" ; D0-DF
+  .byte "????????????????" ; E0-EF
+  .byte "????????????????" ; F0-FF
+
 
     ; BBC BASIC system calls. BBC BASIC calls these by jumping to their place in memory.
     ; Most of them jump to a 'vector' that properly handles the system call.
