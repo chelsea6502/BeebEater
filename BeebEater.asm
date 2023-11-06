@@ -576,7 +576,7 @@ keyboard_interrupt:
     CMP #$59 ; is it the left shift?
     BEQ shift_up ; clear the shift flag
     
-    JMP keyboard_interrupt_exit ; We've processes a released key. Skip to the end.
+    JMP keyboard_interrupt_exit ; We've processed a released key. Skip to the end.
 
 ; Routine to clear the 'Shift' flag when we release the Shift key.
 shift_up:
@@ -736,6 +736,11 @@ lcdbusy:
   eor #E          ; Clear E bit
   sta PORTB
   rts
+
+  .org $c480
+
+; Keep this 14.2kb of space open for a future feature ;)
+; In other words, Everything above must be less than 1152 bytes.
 
  .org $fd00
 keymap:
