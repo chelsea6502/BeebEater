@@ -207,9 +207,9 @@ printMessageLoop:
 ; It also checks if the escape key has been pressed. If it has, it lets BBC BASIC know that it needs to leave whatever it's running.
 OSRDCH:
     ; First, check for escape flag
-    LDA #0
+    LDA #0 ; Reset A just to be safe
     BIT $FF ; if the escape flag set?
-    BMI escapeCondition
+    BMI escapeCondition ; Skip reading and jump to escape handling.
 
     ; If there's no escape flag set, let's check the READBUFFER to see if it's full.
     ; We don't read the ACIA directly here. We use the IRQ interrupt handler to read the character and place it into READBUFFER.
@@ -225,7 +225,7 @@ OSRDCH:
 escapeCondition:
     ; If we're here, that means that the user just pressed the escape key. This should signal to BBC BASIC to stop whatever it's doing.
     LDA #0
-    STA READBUFFER ; clear the character buffer
+    STA READBUFFER ; clear the character buffer by writing '0' to it
     SEC ; Set the carry bit, which BASIC reads as the escape condition is set.
     LDA #$1B ; Load the 'ESC' ASCII character into A.
     RTS
@@ -258,7 +258,7 @@ OSWRCHV_RETURN: ; make sure this is still included if have commented WAIT_SETUP 
         ; $0800 by default, because we need to reserve $0000-$0800 for BBC BASIC.
 OSBYTEV: 
     CMP #$7E ; is it the 'acknowledge escape' system call?
-    BEQ OSBYTE7E
+    BEQ OSBYTE7E ; Jump to the 'acknowledge escape' routine.
     CMP #$84 ; Is it the 'read top of memory' system call?
     BEQ OSBYTE84 ; Put address '$4000' in YX registers.
     CMP #$83 ; Is it the 'read bottom of memory' system call?
@@ -269,15 +269,10 @@ OSBYTE7E: ; Routine that 'acknowledges' the escape key has been pressed.
     LDA #0 ; Reset A
     LDX #0 ; Reset X
     BIT $FF   ; check for the ESCAPE flag. 'BIT' just checks bit 7 and 6.
-    BPL osbyte124  ; if there's no ESCAPE flag then branch. Just clear the ESCAPE condition.
-    LDA $0276   ; Get ESCAPE effects. TODO: Explain ESCAPE effects.
-    BNE noEscapeEffects  ; No escape effects? 
-    CLI    ; Allow interrupts
-noEscapeEffects:
+    BPL clearEscape  ; if there's no ESCAPE flag then branch. Just clear the ESCAPE condition.
     LDX #$FF   ; X=$FF to indicate ESCAPE has been acknowledged
-osbyte124:
+clearEscape:
     CLC    ; Clear the carry bit to let BBC BASIC know there's no more escape key to process.
-osbyte125:
     ROR $FF ; set/clear bit 7 of ESCAPE flag
     RTS 
 
