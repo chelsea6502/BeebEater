@@ -201,6 +201,9 @@ printMessageLoop:
     BNE printMessageLoop ;  If A is not 0, read the next character.
     RTS ; Return to where we were before 'printMessage' was called.
 
+
+; -- OS Call Routines --
+
 ; OSRDCH: 'OS Read Character'
 ; This subroutine waits for a character to arrive from the ACIA, then stores it into the A register for another subroutine to read.
 ; We use this to send input from your keyboard to BBC BASIC.
@@ -269,8 +272,8 @@ OSBYTE7E: ; Routine that 'acknowledges' the escape key has been pressed.
     LDA #0 ; Reset A
     LDX #0 ; Reset X
     BIT $FF   ; check for the ESCAPE flag. 'BIT' just checks bit 7 and 6.
-    BPL clearEscape  ; if there's no ESCAPE flag then branch. Just clear the ESCAPE condition.
-    LDX #$FF   ; X=$FF to indicate ESCAPE has been acknowledged
+    BPL clearEscape  ; if there's no ESCAPE flag then just clear the ESCAPE condition.
+    LDX #$FF   ; If escape HAS been pressed, set X=$FF to indicate ESCAPE has been acknowledged
 clearEscape:
     CLC    ; Clear the carry bit to let BBC BASIC know there's no more escape key to process.
     ROR $FF ; set/clear bit 7 of ESCAPE flag
@@ -332,16 +335,16 @@ osword0setup:
     STA $E9 ; Store into temporary buffer (high byte)
 
     LDY #$00
-    STY $0269 ; store 0 in 'paged mode counter'?
+    STY $0269 ; [store 0 in 'paged mode counter'?]
 
     LDA ($F0),Y ; Get value (low byte) from zero-page
     STA $E8 ; Store into temporary buffer (low byte)
 
-    CLI ; enable interrupts
+    CLI ; Enable interrupts
     BCC readInputCharacter
 
 readLineInputBufferFull:
-    LDA #07 ; send a 'bell character'
+    LDA #07 ; Send a 'bell character'
 retryWithoutIncrement:
     DEY ; Decrement Y. We are essentially 'cancelling out' the next instruction.
 retryWithIncrement:
@@ -356,11 +359,11 @@ readInputCharacter:
     CMP #$7F ; Is it a delete? Let's delete the last character.
     BEQ delete
 
-    BNE checkLowercase ; otherwise, move on
+    BNE checkLowercase ; Otherwise, move on
 delete:
-    CPY #0 ; are we at the first character?
-    BEQ readInputCharacter ; then do nothing
-    DEY ; otherwise, go back 1
+    CPY #0 ; Are we at the first character?
+    BEQ readInputCharacter ; Then do nothing
+    DEY ; Otherwise, go back 1
     BCS outputAndReadAgain ; Write the delete character. Go bback to the start.
 checkLowercase: 
     CMP #$61        ; Compare with 'a'
@@ -420,8 +423,10 @@ writeTimerLoop:
     STA TICKS, X
     INX
     DEY
-    BPL writeTimerLoop ; ; Loop while Y is still greater than 0. BPL = "Branch on PLus"
+    BPL writeTimerLoop
     RTS
+
+; -- Interrupt Handling --
 
 ; Subroutine called after every NMI or IRQ in hardware, or the BRK instruction in software.
 interrupt:
@@ -429,28 +434,28 @@ interrupt:
     PLA ; get status register. it's on the stack at this point
     PHA ; put the status flags back on the stack
     AND #$10 ; Check if it's a BRK or an IRQ.
-    BEQ IRQV 
+    BEQ irqv 
     JMP BRKV ; If it's BRK, that's an error. Go to the BRK vector.
-IRQV: ; Otherwise, it's an IRQ. Let's check what caused the interrupt, starting with the ACIA.
+irqv: ; Otherwise, it's an IRQ. Let's check what caused the interrupt, starting with the ACIA.
     LDA ACIA_STATUS
     AND #$88 ; Check the ACIA status register to find out if the ACIA is asking to read a character.
-    BEQ IRQ_KEYBOARD ; If there's nothing to read, then we'll try the keyboard
-IRQ_ACIA:
+    BEQ irq_keyboard ; If there's nothing to read, then we'll try the keyboard
+irq_acia:
     LDA ACIA_DATA ; Read the ACIA. Because reading the ACIA clears the data, this is the only place allowed to read it directly!
     STA READBUFFER ; For everywhere else that needs to access the character, we will store in memory.
     CMP #$1B ; check if an escape key was pressed
     BNE end_irq ; If it's not an escape key, we've done everything we need. Skip to the end.
-IRQ_ESCAPE: ; If an escape key was pressed, let's set the escape flag.
+irq_escape: ; If an escape key was pressed, let's set the escape flag.
     LDA #$FF
     STA $FF ; set the 'escape flag' address at $FF to the value #$FF.
     JMP end_irq ; Skip to the end.
-IRQ_KEYBOARD: ; If we've ruled out the ACIA, then let's try the keyboard
-    LDA IFR
-    AND #%00000010
-    BEQ IRQ_VIA_TICK
-    JSR keyboard_interrupt
-    jmp end_irq
-IRQ_VIA_TICK: ; If we've ruled out the ACIA, then let's assume it was the VIA timer.
+irq_keyboard: ; If we've ruled out the ACIA, then let's try the keyboard.
+    LDA IFR ; Check the "Interrupt Flag Register" to make sure it was the keyboard that caused the interrupt.
+    AND #%00000010 ; We have to check bit 2.
+    BEQ irq_via_tick ; Bit 2 isn't set? Let's asume it was the timer instead.
+    JSR keyboard_interrupt ; Jump to the routing that reads PORTA and stores the character into READBUFFER.
+    JMP end_irq ; Finish the interrupt.
+irq_via_tick: ; If we've ruled out the ACIA, then let's assume it was the VIA timer.
     LDA T1CL ; Clear the interrupt by reading the timer.
     INC TICKS + 4 ; Increment the 4th byte, which holds the lowest byte.
     BNE end_irq ; If the byte didn't overflow from FF to 00, then we've done all we need. Skip to the end.
@@ -461,18 +466,18 @@ IRQ_VIA_TICK: ; If we've ruled out the ACIA, then let's assume it was the VIA ti
     INC TICKS + 1
     BNE end_irq
     INC TICKS
-
 end_irq:
     LDA $FC ; Restore what was in the A register before we were so rudely interrupted
     RTI ; "ReTurn from Interrupt"
 
+; -- Keyboard Interrupt Routines --
 
 keyboard_interrupt:
-  pha
-  txa
-  pha
+    PHA ; Save A for the end
+    TXA
+    PHA ; Save A to use later in the routine
 
-    ;first, check if we are releasing a key
+    ; First, check if we are releasing a key
     lda KEYBOARD_FLAGS
     and #RELEASE
     beq read_key ; move on if we are not releasing a key
