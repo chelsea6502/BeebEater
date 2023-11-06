@@ -1,6 +1,8 @@
-; BeebEater v0.2.1 - BBC BASIC for the Ben Eater 6502.
+; BeebEater v0.3 - BBC BASIC for the Ben Eater 6502.
 ; by Chelsea Wilkinson (chelsea6502)
 ; https://github.com/chelsea6502/BeebEater
+
+; -- Constants --
 
 ; First, let's set some addresses...
 BASIC = $8000 ; the entry point for the BBC BASIC rom.
@@ -8,47 +10,45 @@ START = $C000 ; the entry point for BeebEater
 
 ; BeebEater-specific memory addresses. $00-5F is reserved for BBC BASIC!
 READBUFFER = $60 ; this stores the latest ASCII character that was sent into the ACIA
-kb_flags = $61
+KEYBOARD_FLAGS = $61 ; This byte helps us keep track of the state of a key presses on the keyboard. See below.
 
-RELEASE = %00000001
-SHIFT   = %00000010
+; Keyboard flag constants:
+RELEASE = %00000001 ; Flag for if a key has just been released.
+SHIFT   = %00000010 ; Flag for if we are holding down the shift key.
 
-; Next, let's define the 'OS Calls'. These calls are how BBC BASIC interacts with hardware.
+; BBC BASIC-specific locations. These cannot be changed.
+TICKS = $0292 ; A 5-byte memory location ($0292-$0296) that counts the number of 'centiseconds' since booting up. We use this this for the TIME command.
+
+; Next, let's define where our ACIA is. $5000 is the default.
+ACIA_DATA = $5000
+ACIA_STATUS = $5001 ; Status register
+ACIA_CMD = $5002 ; Command register
+ACIA_CTRL = $5003 ; Control register
+
+; Next, let's define where the VIA is. $6000 is the default.
+;PORTB = $6000 ; Location of register B on the VIA. Keep this available for the future LCD update.
+PORTA = $6001 ; Location of register A on the VIA.
+;DDRB = $6002 ; "Data Direction Register B"
+DDRA = $6003 ; "Data Direction Register A"
+T1CL = $6004 ; "Timer 1 Counter Low"
+T1CH = $6005 ; "Timer 1 Counter High"
+ACR = $600B ; "Auxiliary Control Register"
+PCR = $600C ; "Peripheral Control Register"
+IFR = $600D ; "Interrupt Flag Register"
+IER = $600E ; "Interrupt Enable Register"'
+
+; BBC BASIC "OS Calls". BBC BASIC jumps to these addresses when it wants to use your hardware for something.
 OSASCI = $FFE3 ; "OS ASCII" - Print an ASCII character stored in Register A (Accumulator)
 OSNEWL = $FFE7 ; "OS New Line" - Print the 'CR' ASCII character, followed by the 'LF' character. These two characters make up a new line.
 OSWRCH = $FFEE ; "OS Write Character" - Print a byte stored in the Accumulator. This doesn't necessarily have to be an ASCII one.
 OSWORD = $FFF1 ; "OS Word" - This one is actually several system calls wrapped together. These system calls involve inputs more than one byte: a "word".
 OSBYTE = $FFF4 ; "OS Byte" - A group of system calls that have inputs of only one byte. This one is much simpler than OSWORD.
 
-; These are BBC BASIC-specific locations in memory. These locations are defined by BBC BASIC.
-TICKS = $0292 ; A 5-byte memory location ($0292-$0296) that counts the number of 'centiseconds' since booting up. We use this this for the TIME command.
-
-
-
 ; 6502-specific addresses
 NMI = $FFFA ; This is the entry point for when we trigger a 'Non-Maskable Interupt'. 
-; RESET = $FFFC ; We don't need to define this because it comes directly after NMI.
-; IRQ = $FFFD ; We don't need to define this because it comes directly after IRQ.
 
-; Next, let's define where our ACIA is. $5000 is the default for Ben Eater.
-ACIA_DATA = $5000
-ACIA_STATUS = $5001 ; Status register
-ACIA_CMD = $5002 ; Command register
-ACIA_CTRL = $5003 ; Control register
+; -- Entry Points --
 
-; Next, let's define where the VIA is. $6000 is the default for Ben Eater.
-; Right now we only use the VIA for timers. We'll use the ports for future versions.
-;PORTB = $6000
-PORTA = $6001
-;DDRB = $6002 ; "Data Direction Register B"
-DDRA = $6003 ; "Data Direction Register A"
-T1CL = $6004 ; "Timer 1 Counter Low"
-T1CH = $6005 ; "Timer 1 Counter High"
-ACR = $600B ; "Auxiliary Control Register"
-PCR = $600c ; [program control register?]
-IFR = $600D ; "Interrupt Flag Register"
-IER = $600E ; "Interrupt Enable Register"
-    
     .org BASIC  ; Set the start of the rom at $8000.
     incbin "Basic4r32.rom"  ; Import the binary file for BBC BASIC version 4r32. 
                                 ; Sourced from: https://mdfs.net/Software/BBCBasic/6502/
@@ -58,6 +58,8 @@ IER = $600E ; "Interrupt Enable Register"
                                 ; Download the one from the "Acorn BBC Microcomputer" section.
 
     .org START ; set the start of BeebEater at $C000.
+
+; -- ROM Constants. Unlike the constants before, these are actually stored in the EEPROM. --
 
 ; Define the boot message. By default, you should see this at boot:
 ;;; BBC Computer 16k
@@ -75,20 +77,27 @@ bootMessageRAM: ; The second part of the first line.
     .byte $07 ; $07 is the "Bell" ASCII character. This plays a sound in most serial monitors.
     .byte $00 ; End with NUL
 
+; -- Start of Program --
+
 ; Setup BeebEater. The reset addresses of $FFFC and $FFFD point to here.
 ; Let's set any hardware-specific things here.
 reset:
-    SEI
+    ; -- Wipe Memory --
 
-    ; Clear registers
+    ; In case we did a 'soft' reset where memory is preserved, let's wipe the previous state and start again.
+    SEI ; Disable interrupts
+
+    ; Reset the processor status
     LDA #0
     PHA ; Push A onto the stack
     PLP ; PLP = "Pull status from stack". This essentially resets the status flags to 0.
+
+    ; Wipe all the RAM
     LDX #0
     LDY #0
     JSR wipe_ram ; Let's clear all the RAM and start fresh
 
-    ; --- ACIA 6551 Initialisation ---
+    ; -- ACIA 6551 Initialisation --
 
     LDA #$00
     STA DDRA
@@ -104,7 +113,6 @@ reset:
     LDA #$10 ; 1 stop bit, 8 bits, 16x baud. ('16x' means 115200 on a 1.8432Mhz clock)
     STA ACIA_CTRL
 
-
     ; --- VIA 6522 Initialisation ---
 
     ; Initialise the 'Auxiliary Control Register (ACR)'.
@@ -119,19 +127,19 @@ reset:
     LDA #$27
     STA T1CH
 
-    ; set VIA to send interrupt on rising edge of CA1 
+    ; Set two interrupt triggers on the VIA:
+    ; 1. When the timer goes to 0
+    ; 2. When the 'CA1' pin has a rising edge (for the PS/2 Keyboard)
     lda #$01
     sta PCR
-    ;lda #$82
     lda #$C2
     sta IER
 
     ; Initialise the 'Interrupt Enable Register (IER)'.
-    ; WARNING: Ben Eater wires the ACIA IRQ to the 6502 IRQ. This means that timers will stop counting if interrupts are disabled with 'SEI' at any point!
-    ; If you don't want this to happen, sent the ACIA IRQ to 6502's NMI instead. That way 'SEI' can't pause the timers.
     LDA #%11000000 ; Trigger an IRQ interrupt every time Timer 1 runs out.
     STA IER
-    ; fall through to 'boot' label
+
+    ; fall through to 'boot'
 boot: ; Setup and enter BBC BASIC
 
     ; Reset the part in memory that stores the time elapsed since boot.
@@ -143,7 +151,6 @@ boot: ; Setup and enter BBC BASIC
     STA TICKS + 4
 
     ; BBC BASIC stores the address of the 'write character' routine at $020E for quick access.
-    ; If we want to print characters, we also need to tell BBC BASIC where it is.
     LDA #>OSWRCH ; Get the upper two bytes of OSWRCH (FF)
     STA $020F ; Store it in $020F. This is where BBC BASIC looks for the OSWRCH instruction.
     LDA #<OSWRCH ; Load the lower two bytes of OSWRCH (EE)
@@ -471,14 +478,14 @@ keyboard_interrupt:
   pha
 
     ;first, check if we are releasing a key
-    lda kb_flags
+    lda KEYBOARD_FLAGS
     and #RELEASE
     beq read_key ; move on if we are not releasing a key
 
     ; clear the release bit
-    lda kb_flags
+    lda KEYBOARD_FLAGS
     eor #RELEASE
-    sta kb_flags
+    sta KEYBOARD_FLAGS
     lda PORTA ; read to clear the interrupt
     
     cmp #$12 ; is it the left shift?
@@ -489,9 +496,9 @@ keyboard_interrupt:
     jmp keyboard_interrupt_exit
 
 shift_up:
-    lda kb_flags
+    lda KEYBOARD_FLAGS
     eor #SHIFT
-    sta kb_flags
+    sta KEYBOARD_FLAGS
     jmp keyboard_interrupt_exit
 
 read_key:
@@ -505,7 +512,7 @@ read_key:
     beq shift_down ; set the  shift flag
 
   tax
-  lda kb_flags
+  lda KEYBOARD_FLAGS
   and #SHIFT
   bne shifted_key
 
@@ -528,15 +535,15 @@ push_key:
   jmp keyboard_interrupt_exit
 
 shift_down:
-    lda kb_flags
+    lda KEYBOARD_FLAGS
     ora #SHIFT
-    sta kb_flags
+    sta KEYBOARD_FLAGS
     jmp keyboard_interrupt_exit
 
 key_release:
-  lda kb_flags
+  lda KEYBOARD_FLAGS
   ora #RELEASE
-  sta kb_flags
+  sta KEYBOARD_FLAGS
 
 keyboard_interrupt_exit:
     pla
