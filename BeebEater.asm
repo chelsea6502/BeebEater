@@ -193,6 +193,9 @@ inner_loop:
     LDA #%11000000 ; put cursor at position 40
     JSR lcd_instruction
 
+    LDA #'E'
+    JSR print_char
+
     ; --- VIA 6522 Initialisation ---
 
     ; Initialise the 'Auxiliary Control Register (ACR)'.
@@ -711,6 +714,29 @@ lcdbusy:
   sta DDRB
   pla
   rts 
+
+  print_char:
+  jsr lcd_wait
+  pha
+  lsr
+  lsr
+  lsr
+  lsr             ; Send high 4 bits
+  ora #RS         ; Set RS
+  sta PORTB
+  ora #E          ; Set E bit to send instruction
+  sta PORTB
+  eor #E          ; Clear E bit
+  sta PORTB
+  pla
+  and #%00001111  ; Send low 4 bits
+  ora #RS         ; Set RS
+  sta PORTB
+  ora #E          ; Set E bit to send instruction
+  sta PORTB
+  eor #E          ; Clear E bit
+  sta PORTB
+  rts
 
  .org $fd00
 keymap:
