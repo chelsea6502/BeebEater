@@ -450,7 +450,7 @@ delete:
 checkLowercase: 
     CMP #$61        ; Compare with 'a'
     BCC notLower    ; If less than 'a', it's not a lowercase letter
-    CMP #$7A        ; Compare with 'z'
+    CMP #$7B        ; Compare with 'z'
     BCS notLower    ; If greater than 'z', it's not a lowercase letter
     AND #$DF        ; Clear the 5th bit to convert to uppercase
 notLower:
