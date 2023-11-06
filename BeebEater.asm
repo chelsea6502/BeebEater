@@ -95,7 +95,18 @@ reset:
     ; Wipe all the RAM
     LDX #0
     LDY #0
-    JSR wipe_ram ; Let's clear all the RAM and start fresh
+reset_wipe_ram_loop:
+    STA ($00,X) ; Store the accumulator (which is already 0) to the effective address
+    INX ; Increment the low byte
+    BNE reset_wipe_ram_no_incy  ; If the low byte is not 0 (no overflow), skip the Y increment
+    INY ; Increment the high byte
+reset_wipe_ram_no_incy:
+    CPY #$40 ; Check if we've reached past $3FFF
+    BNE reset_wipe_ram_loop ; If we haven't, continue the loop
+
+    ; Reset registers just to be safe
+    LDX #0
+    LDY #0 
 
     ; -- ACIA 6551 Initialisation --
 
@@ -393,7 +404,7 @@ continueRead:
 newLineAndExit:
     JSR OSNEWL
     LDA $FF ; set escape flag
-    ROL ; "put bit 7 into carry"
+    ROL ; Put bit 7 into the carry bit in the status register
 Escape:
     RTS
 
@@ -473,83 +484,91 @@ end_irq:
 ; -- Keyboard Interrupt Routines --
 
 keyboard_interrupt:
-    PHA ; Save A for the end
+    PHA ; Save A
     TXA
-    PHA ; Save A to use later in the routine
+    PHA ; Save X
 
     ; First, check if we are releasing a key
-    lda KEYBOARD_FLAGS
-    and #RELEASE
-    beq read_key ; move on if we are not releasing a key
+    LDA KEYBOARD_FLAGS
+    AND #RELEASE
+    BEQ read_key ; Skip ahead if we are not releasing a key
 
-    ; clear the release bit
-    lda KEYBOARD_FLAGS
-    eor #RELEASE
-    sta KEYBOARD_FLAGS
-    lda PORTA ; read to clear the interrupt
+    ; If we ARE releasing a key, let's clear the release flag
+    LDA KEYBOARD_FLAGS
+    EOR #RELEASE ; Flip the release bit
+    STA KEYBOARD_FLAGS
+    LDA PORTA ; read to clear the interrupt
     
-    cmp #$12 ; is it the left shift?
-    beq shift_up ; clear the shift flag
-    cmp #$59 ; is it the left shift?
-    beq shift_up ; clear the shift flag
+    ; Check if we are releasing the shift key:
+    CMP #$12 ; is it the left shift?
+    BEQ shift_up ; clear the shift flag
+    CMP #$59 ; is it the left shift?
+    BEQ shift_up ; clear the shift flag
     
-    jmp keyboard_interrupt_exit
+    JMP keyboard_interrupt_exit ; We've processes a released key. Skip to the end.
 
+; Routine to clear the 'Shift' flag when we release the Shift key.
 shift_up:
-    lda KEYBOARD_FLAGS
-    eor #SHIFT
-    sta KEYBOARD_FLAGS
-    jmp keyboard_interrupt_exit
+    LDA KEYBOARD_FLAGS
+    EOR #SHIFT
+    STA KEYBOARD_FLAGS
+    JMP keyboard_interrupt_exit
 
-read_key:
-  lda PORTA
-  cmp #$F0
-  beq key_release
-
-    cmp #$12 ; check if we pressed the left shift key
-    beq shift_down ; set the shift flag
-    cmp #$59 ; right shift
-    beq shift_down ; set the  shift flag
-
-  tax
-  lda KEYBOARD_FLAGS
-  and #SHIFT
-  bne shifted_key
-
-  lda keymap,X
-    jmp push_key
-
-shifted_key:
-    lda keymap_shifted,X
-    jmp push_key
-
-push_key:
-    PHA
-  sta READBUFFER
-    PLA
-  CMP #$1B
-  BNE keyboard_interrupt_exit
-  LDA #$FF
-  STA $FF ; set the 'escape flag' address at $FF to the value #$FF.
-
-  jmp keyboard_interrupt_exit
-
+; Routine to set the 'Shift' flag when we press and hold the Shift key.
 shift_down:
     lda KEYBOARD_FLAGS
     ora #SHIFT
     sta KEYBOARD_FLAGS
     jmp keyboard_interrupt_exit
 
+; Routine to process what's in PORTA, and store it into READBUFFER for reading later.
+read_key:
+    LDA PORTA
+    CMP #$F0 ; If we've read $F0, that means the keyboard is signalling a key was released.
+    BEQ key_release ; Jump ahead to setting the 'release' flag.
+
+    CMP #$12 ; Left shift was pressed?
+    BEQ shift_down ; Set the shift flag
+    CMP #$59 ; Right shift was pressed?
+    BEQ shift_down ; Set the  shift flag
+
+    ; Convert the PS/2 scancode to an ASCII code.
+    TAX ; Transfer the scancode to X register.
+    LDA KEYBOARD_FLAGS
+    AND #SHIFT
+    BNE shifted_key; If yes, convert it to a capitalised ASCII set.
+
+unshifted_key:
+    LDA keymap,X ; Use the 'keymap' to convert the scancode. Scancode is in X, which will convert to an ASCII stored in A.
+    JMP push_key ; Move ahead to store the ASCII for processing.
+
+shifted_key:
+    LDA keymap_shifted,X
+    JMP push_key
+
+; Now that we have the ASCII character stored in A, let's store it in READBUFFER for processing later.
+push_key:
+    STA READBUFFER ; Store the ASCII into READBUFFER
+    CMP #$1B ; Is the character an escape character?
+    BNE keyboard_interrupt_exit ; If not, we are done.
+    LDA #$FF ; If it IS the escape character, we need to signal that we want to leave the currently running BASIC program. 
+    STA $FF ; set the 'escape flag' address at $FF to the value #$FF.
+    JMP keyboard_interrupt_exit ; We are done.
+
+; Routine to set the 'Release' flag when we release any key.
 key_release:
-  lda KEYBOARD_FLAGS
-  ora #RELEASE
-  sta KEYBOARD_FLAGS
+    LDA KEYBOARD_FLAGS
+    ORA #RELEASE
+    STA KEYBOARD_FLAGS
+    JMP keyboard_interrupt_exit ; We are done.
 
 keyboard_interrupt_exit:
-    pla
-    tax
-    pla
-    rts
+    PLA ; Restore X
+    TAX
+    PLA ; Restore A
+    RTS ; Return back to the interrupt handler
+
+; -- BREAK Handler --
 
 ; Handler for interrupts that we know were called by the BRK instruction. This likely means that there was an error called by BBC BASIC.
 ; BBC BASIC has a way of telling us the error message. To get the message, we need to store the location of the error message into addresses $FD and $FE. 
@@ -576,25 +595,6 @@ BRKV:
     JMP ($0202)     
     RTS ; The error handler will return us to here. From there, let's return to where we were before the BRK.
 
-wipe_ram:
-        PHA ; Save A register (Accumulator)
-        PHX ; Save X register
-        PHY ; Save Y register
-        LDA #$00
-        LDX #$00       ; Start with the low byte of the address at $00
-        LDY #$00       ; Start with the high byte of the address at $00
-wipe_ram_loop:
-        STA ($00,X)    ; Store the accumulator (which is already 0) to the effective address
-        INX            ; Increment the low byte
-        BNE no_incy    ; If the low byte is not 0 (no overflow), skip the Y increment
-        INY            ; Increment the high byte
-no_incy:
-        CPY #$40       ; Check if we've reached past $3FFF
-        BNE wipe_ram_loop ; If we haven't, continue the loop
-        PLY ; Restore Y register
-        PLX ; Restore X register
-        PLA ; Restore A register
-        RTS
 
  .org $fd00
 keymap:
