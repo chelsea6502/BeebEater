@@ -1,4 +1,4 @@
-; BeebEater v0.3 - BBC BASIC for the Ben Eater 6502.
+; BeebEater v0.4 - BBC BASIC for the Ben Eater 6502.
 ; by Chelsea Wilkinson (chelsea6502)
 ; https://github.com/chelsea6502/BeebEater
 
@@ -779,24 +779,30 @@ keymap_shifted:
   .byte "????????????????" ; F0-FF
 
 
-    ; BBC BASIC system calls. BBC BASIC calls these by jumping to their place in memory.
-    ; Most of them jump to a 'vector' that properly handles the system call.
-    .org OSASCI
-    CMP #$0D ; Is it the 'Enter' key? Jump to OSNEWL, otherwise fall through to OSWRCH.
-    BNE OSWRCH
-   .org OSNEWL ; OSNEWL is essentially OSWRCH, but with a line break (CR+LF)
-    LDA #$0A ; Send 'Carriage Return' character.
-    JSR OSWRCH
-    LDA #$0D ; Send a 'Line Feed' character. CR+LF make up a complete line break.
-    .org OSWRCH
-    JMP OSWRCHV ; At address 'OSWRCH', jump to the 'OSWRCH' routine (AKA a 'vector').
-    .org OSWORD
-    JMP OSWORDV
-    .org OSBYTE
-    JMP OSBYTEV
+  ; BBC BASIC system calls. BBC BASIC calls these by jumping to their place in memory.
+  ; Most of them jump to a 'vector' that properly handles the system call.
+  .org OSASCI
+  CMP #$0D ; Is it the 'Enter' key? Jump to OSNEWL, otherwise fall through to OSWRCH.
+  BNE OSWRCH
+  ; If it's the enter key, fall through to OSNEWL
+  
+  .org OSNEWL ; OSNEWL is essentially OSWRCH, but with a line break (CR+LF)
+  LDA #$0A ; Send 'Carriage Return' character.
+  JSR OSWRCH
+  LDA #$0D ; Send a 'Line Feed' character. CR+LF make up a complete line break.
+  ; fall through to OSWRCH
 
-    ; 6502-specific calls, such as interrupts and resets.
-    .org NMI
-    .word interrupt ; at NMI, go to interrupt handler
-    .word reset ; at RESET address, go to reset label
-    .word interrupt ; When IRQ goes low or BRK is called, go to the interrupt handler
+  .org OSWRCH
+  JMP OSWRCHV ; At address 'OSWRCH', jump to the 'OSWRCH' routine (AKA a 'vector').
+
+  .org OSWORD
+  JMP OSWORDV
+
+  .org OSBYTE
+  JMP OSBYTEV
+
+  ; 6502-specific calls, such as interrupts and resets.
+  .org NMI
+  .word interrupt ; at NMI, go to interrupt handler
+  .word reset ; at RESET address, go to reset label
+  .word interrupt ; When IRQ goes low or BRK is called, go to the interrupt handler
