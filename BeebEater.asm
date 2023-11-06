@@ -1,6 +1,8 @@
-; BeebEater v0.2.1 - BBC BASIC for the Ben Eater 6502.
+; BeebEater v0.3 - BBC BASIC for the Ben Eater 6502.
 ; by Chelsea Wilkinson (chelsea6502)
 ; https://github.com/chelsea6502/BeebEater
+
+; -- Constants --
 
 ; First, let's set some addresses...
 BASIC = $8000 ; the entry point for the BBC BASIC rom.
@@ -8,40 +10,45 @@ START = $C000 ; the entry point for BeebEater
 
 ; BeebEater-specific memory addresses. $00-5F is reserved for BBC BASIC!
 READBUFFER = $60 ; this stores the latest ASCII character that was sent into the ACIA
+KEYBOARD_FLAGS = $61 ; This byte helps us keep track of the state of a key presses on the keyboard. See below.
 
-; Next, let's define the 'OS Calls'. These calls are how BBC BASIC interacts with hardware.
+; Keyboard flag constants:
+RELEASE = %00000001 ; Flag for if a key has just been released.
+SHIFT   = %00000010 ; Flag for if we are holding down the shift key.
+
+; BBC BASIC-specific locations. These cannot be changed.
+TICKS = $0292 ; A 5-byte memory location ($0292-$0296) that counts the number of 'centiseconds' since booting up. We use this this for the TIME command.
+
+; Next, let's define where our ACIA is. $5000 is the default.
+ACIA_DATA = $5000
+ACIA_STATUS = $5001 ; Status register
+ACIA_CMD = $5002 ; Command register
+ACIA_CTRL = $5003 ; Control register
+
+; Next, let's define where the VIA is. $6000 is the default.
+;PORTB = $6000 ; Location of register B on the VIA. Keep this available for the future LCD update.
+PORTA = $6001 ; Location of register A on the VIA.
+;DDRB = $6002 ; "Data Direction Register B"
+DDRA = $6003 ; "Data Direction Register A"
+T1CL = $6004 ; "Timer 1 Counter Low"
+T1CH = $6005 ; "Timer 1 Counter High"
+ACR = $600B ; "Auxiliary Control Register"
+PCR = $600C ; "Peripheral Control Register"
+IFR = $600D ; "Interrupt Flag Register"
+IER = $600E ; "Interrupt Enable Register"'
+
+; BBC BASIC "OS Calls". BBC BASIC jumps to these addresses when it wants to use your hardware for something.
 OSASCI = $FFE3 ; "OS ASCII" - Print an ASCII character stored in Register A (Accumulator)
 OSNEWL = $FFE7 ; "OS New Line" - Print the 'CR' ASCII character, followed by the 'LF' character. These two characters make up a new line.
 OSWRCH = $FFEE ; "OS Write Character" - Print a byte stored in the Accumulator. This doesn't necessarily have to be an ASCII one.
 OSWORD = $FFF1 ; "OS Word" - This one is actually several system calls wrapped together. These system calls involve inputs more than one byte: a "word".
 OSBYTE = $FFF4 ; "OS Byte" - A group of system calls that have inputs of only one byte. This one is much simpler than OSWORD.
 
-; These are BBC BASIC-specific locations in memory. These locations are defined by BBC BASIC.
-TICKS = $0292 ; A 5-byte memory location ($0292-$0296) that counts the number of 'centiseconds' since booting up. We use this this for the TIME command.
-
 ; 6502-specific addresses
 NMI = $FFFA ; This is the entry point for when we trigger a 'Non-Maskable Interupt'. 
-; RESET = $FFFC ; We don't need to define this because it comes directly after NMI.
-; IRQ = $FFFD ; We don't need to define this because it comes directly after IRQ.
 
-; Next, let's define where our ACIA is. $5000 is the default for Ben Eater.
-ACIA_DATA = $5000
-ACIA_STATUS = $5001 ; Status register
-ACIA_CMD = $5002 ; Command register
-ACIA_CTRL = $5003 ; Control register
+; -- Entry Points --
 
-; Next, let's define where the VIA is. $6000 is the default for Ben Eater.
-; Right now we only use the VIA for timers. We'll use the ports for future versions.
-;PORTB = $6000
-;PORTA = $6001
-;DDRB = $6002 ; "Data Direction Register B"
-;DDRA = $6003 ; "Data Direction Register A"
-T1CL = $6004 ; "Timer 1 Counter Low"
-T1CH = $6005 ; "Timer 1 Counter High"
-ACR = $600B ; "Auxiliary Control Register"
-;IFR = $600D ; "Interrupt Flag Register"
-IER = $600E ; "Interrupt Enable Register"
-    
     .org BASIC  ; Set the start of the rom at $8000.
     incbin "Basic4r32.rom"  ; Import the binary file for BBC BASIC version 4r32. 
                                 ; Sourced from: https://mdfs.net/Software/BBCBasic/6502/
@@ -51,6 +58,8 @@ IER = $600E ; "Interrupt Enable Register"
                                 ; Download the one from the "Acorn BBC Microcomputer" section.
 
     .org START ; set the start of BeebEater at $C000.
+
+; -- ROM Constants. Unlike the constants before, these are actually stored in the EEPROM. --
 
 ; Define the boot message. By default, you should see this at boot:
 ;;; BBC Computer 16k
@@ -68,18 +77,41 @@ bootMessageRAM: ; The second part of the first line.
     .byte $07 ; $07 is the "Bell" ASCII character. This plays a sound in most serial monitors.
     .byte $00 ; End with NUL
 
+; -- Start of Program --
+
 ; Setup BeebEater. The reset addresses of $FFFC and $FFFD point to here.
 ; Let's set any hardware-specific things here.
 reset:
-    ; Clear registers
+    ; -- Wipe Memory --
+
+    ; In case we did a 'soft' reset where memory is preserved, let's wipe the previous state and start again.
+    SEI ; Disable interrupts
+
+    ; Reset the processor status
     LDA #0
     PHA ; Push A onto the stack
     PLP ; PLP = "Pull status from stack". This essentially resets the status flags to 0.
+
+    ; Wipe all the RAM
     LDX #0
     LDY #0
-    JSR wipe_ram ; Let's clear all the RAM and start fresh
+reset_wipe_ram_loop:
+    STA ($00,X) ; Store the accumulator (which is already 0) to the effective address
+    INX ; Increment the low byte
+    BNE reset_wipe_ram_no_incy  ; If the low byte is not 0 (no overflow), skip the Y increment
+    INY ; Increment the high byte
+reset_wipe_ram_no_incy:
+    CPY #$40 ; Check if we've reached past $3FFF
+    BNE reset_wipe_ram_loop ; If we haven't, continue the loop
 
-    ; --- ACIA 6551 Initialisation ---
+    ; Reset registers just to be safe
+    LDX #0
+    LDY #0 
+
+    ; -- ACIA 6551 Initialisation --
+
+    LDA #$00
+    STA DDRA
 
     LDA #$00 ; Soft reset the 6551 ACIA by writing 0 to the status register.
     STA ACIA_STATUS
@@ -91,7 +123,6 @@ reset:
     ; Initialise the ACIA control register
     LDA #$10 ; 1 stop bit, 8 bits, 16x baud. ('16x' means 115200 on a 1.8432Mhz clock)
     STA ACIA_CTRL
-
 
     ; --- VIA 6522 Initialisation ---
 
@@ -107,12 +138,19 @@ reset:
     LDA #$27
     STA T1CH
 
+    ; Set two interrupt triggers on the VIA:
+    ; 1. When the timer goes to 0
+    ; 2. When the 'CA1' pin has a rising edge (for the PS/2 Keyboard)
+    lda #$01
+    sta PCR
+    lda #$C2
+    sta IER
+
     ; Initialise the 'Interrupt Enable Register (IER)'.
-    ; WARNING: Ben Eater wires the ACIA IRQ to the 6502 IRQ. This means that timers will stop counting if interrupts are disabled with 'SEI' at any point!
-    ; If you don't want this to happen, sent the ACIA IRQ to 6502's NMI instead. That way 'SEI' can't pause the timers.
     LDA #%11000000 ; Trigger an IRQ interrupt every time Timer 1 runs out.
     STA IER
-    ; fall through to 'boot' label
+
+    ; fall through to 'boot'
 boot: ; Setup and enter BBC BASIC
 
     ; Reset the part in memory that stores the time elapsed since boot.
@@ -124,7 +162,6 @@ boot: ; Setup and enter BBC BASIC
     STA TICKS + 4
 
     ; BBC BASIC stores the address of the 'write character' routine at $020E for quick access.
-    ; If we want to print characters, we also need to tell BBC BASIC where it is.
     LDA #>OSWRCH ; Get the upper two bytes of OSWRCH (FF)
     STA $020F ; Store it in $020F. This is where BBC BASIC looks for the OSWRCH instruction.
     LDA #<OSWRCH ; Load the lower two bytes of OSWRCH (EE)
@@ -175,15 +212,18 @@ printMessageLoop:
     BNE printMessageLoop ;  If A is not 0, read the next character.
     RTS ; Return to where we were before 'printMessage' was called.
 
+
+; -- OS Call Routines --
+
 ; OSRDCH: 'OS Read Character'
 ; This subroutine waits for a character to arrive from the ACIA, then stores it into the A register for another subroutine to read.
 ; We use this to send input from your keyboard to BBC BASIC.
 ; It also checks if the escape key has been pressed. If it has, it lets BBC BASIC know that it needs to leave whatever it's running.
 OSRDCH:
     ; First, check for escape flag
-    LDA #0
+    LDA #0 ; Reset A just to be safe
     BIT $FF ; if the escape flag set?
-    BMI escapeCondition
+    BMI escapeCondition ; Skip reading and jump to escape handling.
 
     ; If there's no escape flag set, let's check the READBUFFER to see if it's full.
     ; We don't read the ACIA directly here. We use the IRQ interrupt handler to read the character and place it into READBUFFER.
@@ -199,7 +239,7 @@ OSRDCH:
 escapeCondition:
     ; If we're here, that means that the user just pressed the escape key. This should signal to BBC BASIC to stop whatever it's doing.
     LDA #0
-    STA READBUFFER ; clear the character buffer
+    STA READBUFFER ; clear the character buffer by writing '0' to it
     SEC ; Set the carry bit, which BASIC reads as the escape condition is set.
     LDA #$1B ; Load the 'ESC' ASCII character into A.
     RTS
@@ -232,7 +272,7 @@ OSWRCHV_RETURN: ; make sure this is still included if have commented WAIT_SETUP 
         ; $0800 by default, because we need to reserve $0000-$0800 for BBC BASIC.
 OSBYTEV: 
     CMP #$7E ; is it the 'acknowledge escape' system call?
-    BEQ OSBYTE7E
+    BEQ OSBYTE7E ; Jump to the 'acknowledge escape' routine.
     CMP #$84 ; Is it the 'read top of memory' system call?
     BEQ OSBYTE84 ; Put address '$4000' in YX registers.
     CMP #$83 ; Is it the 'read bottom of memory' system call?
@@ -243,15 +283,10 @@ OSBYTE7E: ; Routine that 'acknowledges' the escape key has been pressed.
     LDA #0 ; Reset A
     LDX #0 ; Reset X
     BIT $FF   ; check for the ESCAPE flag. 'BIT' just checks bit 7 and 6.
-    BPL osbyte124  ; if there's no ESCAPE flag then branch. Just clear the ESCAPE condition.
-    LDA $0276   ; Get ESCAPE effects. TODO: Explain ESCAPE effects.
-    BNE noEscapeEffects  ; No escape effects? 
-    CLI    ; Allow interrupts
-noEscapeEffects:
-    LDX #$FF   ; X=$FF to indicate ESCAPE has been acknowledged
-osbyte124:
+    BPL clearEscape  ; if there's no ESCAPE flag then just clear the ESCAPE condition.
+    LDX #$FF   ; If escape HAS been pressed, set X=$FF to indicate ESCAPE has been acknowledged
+clearEscape:
     CLC    ; Clear the carry bit to let BBC BASIC know there's no more escape key to process.
-osbyte125:
     ROR $FF ; set/clear bit 7 of ESCAPE flag
     RTS 
 
@@ -311,16 +346,16 @@ osword0setup:
     STA $E9 ; Store into temporary buffer (high byte)
 
     LDY #$00
-    STY $0269 ; store 0 in 'paged mode counter'?
+    STY $0269 ; [store 0 in 'paged mode counter'?]
 
     LDA ($F0),Y ; Get value (low byte) from zero-page
     STA $E8 ; Store into temporary buffer (low byte)
 
-    CLI ; enable interrupts
+    CLI ; Enable interrupts
     BCC readInputCharacter
 
 readLineInputBufferFull:
-    LDA #07 ; send a 'bell character'
+    LDA #07 ; Send a 'bell character'
 retryWithoutIncrement:
     DEY ; Decrement Y. We are essentially 'cancelling out' the next instruction.
 retryWithIncrement:
@@ -335,11 +370,11 @@ readInputCharacter:
     CMP #$7F ; Is it a delete? Let's delete the last character.
     BEQ delete
 
-    BNE checkLowercase ; otherwise, move on
+    BNE checkLowercase ; Otherwise, move on
 delete:
-    CPY #0 ; are we at the first character?
-    BEQ readInputCharacter ; then do nothing
-    DEY ; otherwise, go back 1
+    CPY #0 ; Are we at the first character?
+    BEQ readInputCharacter ; Then do nothing
+    DEY ; Otherwise, go back 1
     BCS outputAndReadAgain ; Write the delete character. Go bback to the start.
 checkLowercase: 
     CMP #$61        ; Compare with 'a'
@@ -369,7 +404,7 @@ continueRead:
 newLineAndExit:
     JSR OSNEWL
     LDA $FF ; set escape flag
-    ROL ; "put bit 7 into carry"
+    ROL ; Put bit 7 into the carry bit in the status register
 Escape:
     RTS
 
@@ -399,8 +434,10 @@ writeTimerLoop:
     STA TICKS, X
     INX
     DEY
-    BPL writeTimerLoop ; ; Loop while Y is still greater than 0. BPL = "Branch on PLus"
+    BPL writeTimerLoop
     RTS
+
+; -- Interrupt Handling --
 
 ; Subroutine called after every NMI or IRQ in hardware, or the BRK instruction in software.
 interrupt:
@@ -408,21 +445,28 @@ interrupt:
     PLA ; get status register. it's on the stack at this point
     PHA ; put the status flags back on the stack
     AND #$10 ; Check if it's a BRK or an IRQ.
-    BNE BRKV ; If it's BRK, that's an error. Go to the BRK vector.
-IRQV: ; Otherwise, it's an IRQ. Let's check what caused the interrupt, starting with the ACIA.
+    BEQ irqv 
+    JMP BRKV ; If it's BRK, that's an error. Go to the BRK vector.
+irqv: ; Otherwise, it's an IRQ. Let's check what caused the interrupt, starting with the ACIA.
     LDA ACIA_STATUS
     AND #$88 ; Check the ACIA status register to find out if the ACIA is asking to read a character.
-    BEQ IRQ_VIA_TICK ; If there's nothing to read, then the VIA timer probably caused it.
-IRQ_ACIA:
+    BEQ irq_keyboard ; If there's nothing to read, then we'll try the keyboard
+irq_acia:
     LDA ACIA_DATA ; Read the ACIA. Because reading the ACIA clears the data, this is the only place allowed to read it directly!
     STA READBUFFER ; For everywhere else that needs to access the character, we will store in memory.
     CMP #$1B ; check if an escape key was pressed
     BNE end_irq ; If it's not an escape key, we've done everything we need. Skip to the end.
-IRQ_ACIA_ESCAPE: ; If an escape key was pressed, let's set the escape flag.
+irq_escape: ; If an escape key was pressed, let's set the escape flag.
     LDA #$FF
     STA $FF ; set the 'escape flag' address at $FF to the value #$FF.
     JMP end_irq ; Skip to the end.
-IRQ_VIA_TICK: ; If we've ruled out the ACIA, then let's assume it was the VIA timer.
+irq_keyboard: ; If we've ruled out the ACIA, then let's try the keyboard.
+    LDA IFR ; Check the "Interrupt Flag Register" to make sure it was the keyboard that caused the interrupt.
+    AND #%00000010 ; We have to check bit 2.
+    BEQ irq_via_tick ; Bit 2 isn't set? Let's asume it was the timer instead.
+    JSR keyboard_interrupt ; Jump to the routing that reads PORTA and stores the character into READBUFFER.
+    JMP end_irq ; Finish the interrupt.
+irq_via_tick: ; If we've ruled out the ACIA, then let's assume it was the VIA timer.
     LDA T1CL ; Clear the interrupt by reading the timer.
     INC TICKS + 4 ; Increment the 4th byte, which holds the lowest byte.
     BNE end_irq ; If the byte didn't overflow from FF to 00, then we've done all we need. Skip to the end.
@@ -436,6 +480,95 @@ IRQ_VIA_TICK: ; If we've ruled out the ACIA, then let's assume it was the VIA ti
 end_irq:
     LDA $FC ; Restore what was in the A register before we were so rudely interrupted
     RTI ; "ReTurn from Interrupt"
+
+; -- Keyboard Interrupt Routines --
+
+keyboard_interrupt:
+    PHA ; Save A
+    TXA
+    PHA ; Save X
+
+    ; First, check if we are releasing a key
+    LDA KEYBOARD_FLAGS
+    AND #RELEASE
+    BEQ read_key ; Skip ahead if we are not releasing a key
+
+    ; If we ARE releasing a key, let's clear the release flag
+    LDA KEYBOARD_FLAGS
+    EOR #RELEASE ; Flip the release bit
+    STA KEYBOARD_FLAGS
+    LDA PORTA ; read to clear the interrupt
+    
+    ; Check if we are releasing the shift key:
+    CMP #$12 ; is it the left shift?
+    BEQ shift_up ; clear the shift flag
+    CMP #$59 ; is it the left shift?
+    BEQ shift_up ; clear the shift flag
+    
+    JMP keyboard_interrupt_exit ; We've processes a released key. Skip to the end.
+
+; Routine to clear the 'Shift' flag when we release the Shift key.
+shift_up:
+    LDA KEYBOARD_FLAGS
+    EOR #SHIFT
+    STA KEYBOARD_FLAGS
+    JMP keyboard_interrupt_exit
+
+; Routine to set the 'Shift' flag when we press and hold the Shift key.
+shift_down:
+    lda KEYBOARD_FLAGS
+    ora #SHIFT
+    sta KEYBOARD_FLAGS
+    jmp keyboard_interrupt_exit
+
+; Routine to process what's in PORTA, and store it into READBUFFER for reading later.
+read_key:
+    LDA PORTA
+    CMP #$F0 ; If we've read $F0, that means the keyboard is signalling a key was released.
+    BEQ key_release ; Jump ahead to setting the 'release' flag.
+
+    CMP #$12 ; Left shift was pressed?
+    BEQ shift_down ; Set the shift flag
+    CMP #$59 ; Right shift was pressed?
+    BEQ shift_down ; Set the  shift flag
+
+    ; Convert the PS/2 scancode to an ASCII code.
+    TAX ; Transfer the scancode to X register.
+    LDA KEYBOARD_FLAGS
+    AND #SHIFT
+    BNE shifted_key; If yes, convert it to a capitalised ASCII set.
+
+unshifted_key:
+    LDA keymap,X ; Use the 'keymap' to convert the scancode. Scancode is in X, which will convert to an ASCII stored in A.
+    JMP push_key ; Move ahead to store the ASCII for processing.
+
+shifted_key:
+    LDA keymap_shifted,X
+    JMP push_key
+
+; Now that we have the ASCII character stored in A, let's store it in READBUFFER for processing later.
+push_key:
+    STA READBUFFER ; Store the ASCII into READBUFFER
+    CMP #$1B ; Is the character an escape character?
+    BNE keyboard_interrupt_exit ; If not, we are done.
+    LDA #$FF ; If it IS the escape character, we need to signal that we want to leave the currently running BASIC program. 
+    STA $FF ; set the 'escape flag' address at $FF to the value #$FF.
+    JMP keyboard_interrupt_exit ; We are done.
+
+; Routine to set the 'Release' flag when we release any key.
+key_release:
+    LDA KEYBOARD_FLAGS
+    ORA #RELEASE
+    STA KEYBOARD_FLAGS
+    JMP keyboard_interrupt_exit ; We are done.
+
+keyboard_interrupt_exit:
+    PLA ; Restore X
+    TAX
+    PLA ; Restore A
+    RTS ; Return back to the interrupt handler
+
+; -- BREAK Handler --
 
 ; Handler for interrupts that we know were called by the BRK instruction. This likely means that there was an error called by BBC BASIC.
 ; BBC BASIC has a way of telling us the error message. To get the message, we need to store the location of the error message into addresses $FD and $FE. 
@@ -462,25 +595,43 @@ BRKV:
     JMP ($0202)     
     RTS ; The error handler will return us to here. From there, let's return to where we were before the BRK.
 
-wipe_ram:
-        PHA ; Save A register (Accumulator)
-        PHX ; Save X register
-        PHY ; Save Y register
-        LDA #$00
-        LDX #$00       ; Start with the low byte of the address at $00
-        LDY #$00       ; Start with the high byte of the address at $00
-wipe_ram_loop:
-        STA ($00,X)    ; Store the accumulator (which is already 0) to the effective address
-        INX            ; Increment the low byte
-        BNE no_incy    ; If the low byte is not 0 (no overflow), skip the Y increment
-        INY            ; Increment the high byte
-no_incy:
-        CPY #$40       ; Check if we've reached past $3FFF
-        BNE wipe_ram_loop ; If we haven't, continue the loop
-        PLY ; Restore Y register
-        PLX ; Restore X register
-        PLA ; Restore A register
-        RTS
+
+ .org $fd00
+keymap:
+  .byte "????????????? `?" ; 00-0F
+  .byte "?????q1???zsaw2?" ; 10-1F
+  .byte "?cxde43?? vftr5?" ; 20-2F
+  .byte "?nbhgy6???mju78?" ; 30-3F
+  .byte "?,kio09??./l;p-?" ; 40-4F
+  .byte "??'?[=????",$0d,"]?\??" ; 50-5F
+  .byte "??????",$08,"??1?47???" ; 60-6F
+  .byte "0.2568",$1b,"??+3-*9??" ; 70-7F
+  .byte "????????????????" ; 80-8F
+  .byte "????????????????" ; 90-9F
+  .byte "????????????????" ; A0-AF
+  .byte "????????????????" ; B0-BF
+  .byte "????????????????" ; C0-CF
+  .byte "????????????????" ; D0-DF
+  .byte "????????????????" ; E0-EF
+  .byte "????????????????" ; F0-FF
+keymap_shifted:
+  .byte "????????????? ~?" ; 00-0F
+  .byte "?????Q!???ZSAW@?" ; 10-1F
+  .byte "?CXDE#$?? VFTR%?" ; 20-2F
+  .byte "?NBHGY^???MJU&*?" ; 30-3F
+  .byte "?<KIO)(??>?L:P_?" ; 40-4F
+  .byte '??"?{+?????}?|??' ; 50-5F
+  .byte "?????????1?47???" ; 60-6F
+  .byte "0.2568???+3-*9??" ; 70-7F
+  .byte "????????????????" ; 80-8F
+  .byte "????????????????" ; 90-9F
+  .byte "????????????????" ; A0-AF
+  .byte "????????????????" ; B0-BF
+  .byte "????????????????" ; C0-CF
+  .byte "????????????????" ; D0-DF
+  .byte "????????????????" ; E0-EF
+  .byte "????????????????" ; F0-FF
+
 
     ; BBC BASIC system calls. BBC BASIC calls these by jumping to their place in memory.
     ; Most of them jump to a 'vector' that properly handles the system call.
