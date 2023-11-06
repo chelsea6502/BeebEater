@@ -11,6 +11,9 @@ START = $C000 ; the entry point for BeebEater
 ; BeebEater-specific memory addresses. $00-5F is reserved for BBC BASIC!
 READBUFFER = $60 ; this stores the latest ASCII character that was sent into the ACIA
 KEYBOARD_FLAGS = $61 ; This byte helps us keep track of the state of a key presses on the keyboard. See below.
+LCDREADBUFFER = $62 ; 
+LCDCURSORBUFFER = $63 ; 
+LCDBUFFER = $64 ; 
 
 ; Keyboard flag constants:
 RELEASE = %00000001 ; Flag for if a key has just been released.
@@ -26,9 +29,9 @@ ACIA_CMD = $5002 ; Command register
 ACIA_CTRL = $5003 ; Control register
 
 ; Next, let's define where the VIA is. $6000 is the default.
-;PORTB = $6000 ; Location of register B on the VIA. Keep this available for the future LCD update.
+PORTB = $6000 ; Location of register B on the VIA. Keep this available for the future LCD update.
 PORTA = $6001 ; Location of register A on the VIA.
-;DDRB = $6002 ; "Data Direction Register B"
+DDRB = $6002 ; "Data Direction Register B"
 DDRA = $6003 ; "Data Direction Register A"
 T1CL = $6004 ; "Timer 1 Counter Low"
 T1CH = $6005 ; "Timer 1 Counter High"
@@ -36,6 +39,11 @@ ACR = $600B ; "Auxiliary Control Register"
 PCR = $600C ; "Peripheral Control Register"
 IFR = $600D ; "Interrupt Flag Register"
 IER = $600E ; "Interrupt Enable Register"'
+
+; LCD Constants
+E  = %01000000
+RW = %00100000
+RS = %00010000
 
 ; BBC BASIC "OS Calls". BBC BASIC jumps to these addresses when it wants to use your hardware for something.
 OSASCI = $FFE3 ; "OS ASCII" - Print an ASCII character stored in Register A (Accumulator)
@@ -123,6 +131,67 @@ reset_wipe_ram_no_incy:
     ; Initialise the ACIA control register
     LDA #$10 ; 1 stop bit, 8 bits, 16x baud. ('16x' means 115200 on a 1.8432Mhz clock)
     STA ACIA_CTRL
+
+    ; --- LCD Initialisation ---
+    LDA #%11111111
+    STA DDRB
+
+    lda #%00000011
+    sta PORTB
+    ora #E
+    sta PORTB
+    and #%00001111
+    sta PORTB
+
+    ; wait 4.1ms (4100 clock cycles)
+    LDX #4          ; 2 cycles (once)
+outer_loop:
+    LDY #203        ; 2 cycles (x4)
+inner_loop:
+    DEY             ; 2 cycles (203 x 4)
+    BNE inner_loop  ; 3 cycles (202 x 4 taken, 2 cycles once not taken)
+    DEX             ; 2 cycles (x4)
+    BNE outer_loop  ; 3 cycles (3 x 4 taken, 2 cycles once not taken)
+    NOP             ; 2 cycles (to fine-tune the delay)
+    NOP             ; 2 cycles (to fine-tune the delay)
+
+    LDX #0
+    LDY #0
+
+    lda #%00000011
+    sta PORTB
+    ora #E
+    sta PORTB
+    and #%00001111
+    sta PORTB
+
+    jsr WAIT_SETUP
+
+    lda #%00000011
+    sta PORTB
+    ora #E
+    sta PORTB
+    and #%00001111
+    sta PORTB
+
+    lda #%00000010 ; Set 4-bit mode
+    sta PORTB
+    ora #E
+    sta PORTB
+    and #%00001111
+    sta PORTB
+
+    lda #%00101000 ; Set 4-bit mode; 2-line display; 5x8 font
+    JSR lcd_instruction
+    LDA #%00001111 ; Display on/off control: display on, cursor on, cursor blinking
+    JSR lcd_instruction
+    LDA #%00000110 ; entry mode set: Increment, display shift
+    JSR lcd_instruction
+    LDA #%00000001 ; Clear display
+    JSR lcd_instruction
+
+    LDA #%11000000 ; put cursor at position 40
+    JSR lcd_instruction
 
     ; --- VIA 6522 Initialisation ---
 
@@ -595,6 +664,53 @@ BRKV:
     JMP ($0202)     
     RTS ; The error handler will return us to here. From there, let's return to where we were before the BRK.
 
+
+lcd_instruction:
+  jsr lcd_wait
+  pha
+  lsr
+  lsr
+  lsr
+  lsr            ; Send high 4 bits
+  sta PORTB
+  ora #E         ; Set E bit to send instruction
+  sta PORTB
+  eor #E         ; Clear E bit
+  sta PORTB
+  pla
+  and #%00001111 ; Send low 4 bits
+  sta PORTB
+  ora #E         ; Set E bit to send instruction
+  sta PORTB
+  eor #E         ; Clear E bit
+  sta PORTB
+  rts
+lcd_wait:
+  pha
+  lda #%11110000  ; LCD data is input
+  sta DDRB
+lcdbusy:
+  lda #RW
+  sta PORTB
+  lda #(RW | E)
+  sta PORTB
+  lda PORTB       ; Read high nibble
+  pha             ; and put on stack since it has the busy flag
+  lda #RW
+  sta PORTB
+  lda #(RW | E)
+  sta PORTB
+  lda PORTB
+    pla             ; Get high nibble off stack
+  and #%00001000
+  bne lcdbusy
+
+  lda #RW
+  sta PORTB
+  lda #%11111111  ; LCD data is output
+  sta DDRB
+  pla
+  rts 
 
  .org $fd00
 keymap:
