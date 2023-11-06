@@ -737,7 +737,7 @@ lcdbusy:
   sta PORTB
   rts
 
-  .org $c480
+  .org $c480, 0x00 ; Value after the comma means 'Fill the next space with 0x00 in every byte'
 
 ; Keep this 14.2kb of space open for a future feature ;)
 ; In other words, Everything above must be less than 1152 bytes.
@@ -785,7 +785,7 @@ keymap_shifted:
   CMP #$0D ; Is it the 'Enter' key? Jump to OSNEWL, otherwise fall through to OSWRCH.
   BNE OSWRCH
   ; If it's the enter key, fall through to OSNEWL
-  
+
   .org OSNEWL ; OSNEWL is essentially OSWRCH, but with a line break (CR+LF)
   LDA #$0A ; Send 'Carriage Return' character.
   JSR OSWRCH
