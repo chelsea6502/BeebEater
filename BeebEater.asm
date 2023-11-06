@@ -136,6 +136,8 @@ reset_wipe_ram_no_incy:
     LDA #%11111111
     STA DDRB
 
+    ; LCD reset sequence
+
     lda #%00000011
     sta PORTB
     ora #E
@@ -144,19 +146,16 @@ reset_wipe_ram_no_incy:
     sta PORTB
 
     ; wait 4.1ms (4100 clock cycles)
-    LDX #4          ; 2 cycles (once)
+    LDX #4
 outer_loop:
-    LDY #203        ; 2 cycles (x4)
+    LDY #203
 inner_loop:
-    DEY             ; 2 cycles (203 x 4)
-    BNE inner_loop  ; 3 cycles (202 x 4 taken, 2 cycles once not taken)
-    DEX             ; 2 cycles (x4)
-    BNE outer_loop  ; 3 cycles (3 x 4 taken, 2 cycles once not taken)
-    NOP             ; 2 cycles (to fine-tune the delay)
-    NOP             ; 2 cycles (to fine-tune the delay)
-
-    LDX #0
-    LDY #0
+    DEY  
+    BNE inner_loop 
+    DEX   
+    BNE outer_loop  
+    NOP  
+    NOP
 
     lda #%00000011
     sta PORTB
@@ -165,7 +164,7 @@ inner_loop:
     and #%00001111
     sta PORTB
 
-    jsr WAIT_SETUP
+    jsr WAIT_SETUP ; wait 100 microseconds (0.1ms)
 
     lda #%00000011
     sta PORTB
