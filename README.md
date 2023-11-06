@@ -15,7 +15,7 @@ No extra modifications are required. All you need to do is load `BeebEater.rom` 
 # Features
 
 **BeebEater features:**
- * **Small code base** - Less than 500 lines of assembly!
+ * **Small code base** - Less than 1000 lines of assembly!
  * **Heavily annotated** - Line by line comments to help you understand what's happening as much as possible.
  * **Extensible** - Designed to be easy for you to extend with your own features or custom configurations.
 
@@ -26,11 +26,11 @@ No extra modifications are required. All you need to do is load `BeebEater.rom` 
  * **Native video and sound commands** - While these aren't implemented by default, you have native graphics and sounds commands at your disposal to build upon.
 
 ## Supported features
- * **Output** from the ACIA to the serial terminal.
- * **Input** from the serial terminal to the ACIA.
+ * **Serial Terminal IO** - Interact with BBC BASIC via the serial terminal. 
+ * **Keyboard** - Support for a PS/2 Keyboard connected to PORTA on the VIA.
  * **Error handling** from BBC BASIC.
  * **Backspace/Delete** on current input.
- * **Escape key** for leaving happy little mistakes.
+ * **Escape key** for leaving those happy little mistakes.
  * (CoolTerm Only) **Clear the serial terminal screen** using `CLS`.
 
 ## Unsupported features
@@ -46,7 +46,7 @@ BeebEater assumes you have the [standard Ben Eater 6502 build](https://eater.net
  * 32k ROM at $8000 to $FFFF
  * 16k RAM at $0000 to $3FFF
  * 6551 ACIA at $5000-5003 (with a 1.8432 Mhz external crystal)
- * 6522 VIA at $6000-600F
+ * 6522 VIA at $6000-600F 
 
 **Don’t have RS-232?** You can connect the Rx and Tx pins to a [Serial to USB converter](https://www.jaycar.com.au/duinotech-arduino-compatible-usb-to-serial-adaptor/p/XC4464) like I do.
 
@@ -74,11 +74,9 @@ If you want to make modifications to the code, you’ll need to assemble a new R
 # Future plans
 
 Here's my rough plan for future versions:
- * v0.3 - LCD display (see "LCD" branch if you're impatient)
- * v0.4 - PS/2 Keyboard
+ * v0.4 - LCD display (see "LCD" branch if you're impatient)
  * v1.0 - Official final release: Bug fixes, code cleanups, optimisations.
- * v2.0 - SAVE/LOAD contents of RAM into ROM?
- * v3.0 - External peripherals?
+ * v1.1 - SAVE/LOAD contents of RAM into ROM
 
 Feel free to suggest any other ideas to me. Note that I want to contain it to just the hardware that Ben Eater covers on his YouTube channel.
 
