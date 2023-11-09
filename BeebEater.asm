@@ -762,6 +762,8 @@ print_char:
     BEQ lcd_print_escape ; Go to the escape hander.
     CMP #$08 ; is it backspace?
     BEQ lcd_print_backspace ; Go to the backspace handler.
+    CMP #$0C ; is it the 'Form Feed' character? This is how we clear the screen.
+    BEQ lcd_clear_screen
     CMP #$0D ; is it a newline character?
     BEQ lcd_print_enter  ; Go to the enter handler.
 
@@ -778,6 +780,12 @@ lcd_print_escape:
     LDA #%00000001 ; If the escape character was pressed, let's clear the display.
     JSR lcd_instruction
     LDA #$1B ; Place an 'Escape' ASCII character in the accumulator to signal to other routines that we pressed the escape key.
+    JMP exit_lcd ; Leave early.
+lcd_clear_screen:
+    LDA #%00000001 ; If the 'CLS' command was sent in BBC BASIC, let's clear the display.
+    JSR lcd_instruction
+    LDA #%11000000 ; Put cursor at the start of the second line (Position 40)
+    JSR lcd_instruction
     JMP exit_lcd ; Leave early.
 
 ; Enter handling is a little tricky: What we want to do is transfer the second line to the first line.
@@ -969,7 +977,7 @@ BRKV:
    .org $c480
 
 ; Keep this 14.2kb of EEPROM space open for the SAVE/LOAD feature in BeebEater v1.0.
-; In other words, Everything above must be less than 1152 bytes. As of v0.4, we are currently at 1126 bytes. 
+; In other words, Everything above must be less than 1152 bytes. As of v0.4, we are currently at 1143 bytes. 
 ; This space will allow you to save/load your BBC BASIC program to ROM storage!
 
    .org $fd00
