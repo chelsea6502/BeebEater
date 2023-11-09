@@ -23,7 +23,7 @@ No extra modifications are required. All you need to do is load `BeebEater.rom` 
  * **Modern programming concepts** - BBC BASIC uses modern programming concepts such as `IF`, `WHILE`, `FOR` and even functions with `DEF PROC`.
  * **Built-in assembler** - Supports executing assembly code. **That's right, you can program your 6502 USING your 6502!**
  * **It's fast** - BBC BASIC is famous for being one of the best perfoming BASIC interpreters for the 6502.
- * **Native video and sound commands** - While these aren't implemented by default, you have native graphics and sounds commands at your disposal to build upon.
+ * **Native LCD and PS/2 Keyboard support** LCD with a PS/2 Keyboard turns your 6502 build into (at least in theory) a fully independent computer!
 
 ## Supported features
  * **Serial Terminal IO** - Interact with BBC BASIC via the serial terminal. 
@@ -70,15 +70,6 @@ If you have a standard Ben Eater 6502 memory mapping, everything is done for you
 If you want to make modifications to the code, you’ll need to assemble a new ROM using VASM. Use the following VASM flags to generate a new ROM:
 	
 `/PATH/TO/vasm/vasm6502_oldstyle -Fbin -dotdir ./BeebEater.asm -c02 -o ./BeebEaterNew.rom`
-
-# Future plans
-
-Here's my rough plan for future versions:
- * v0.4 - LCD display (see "LCD" branch if you're impatient)
- * v1.0 - Official final release: Bug fixes, code cleanups, optimisations.
- * v1.1 - SAVE/LOAD contents of RAM into ROM
-
-Feel free to suggest any other ideas to me. Note that I want to contain it to just the hardware that Ben Eater covers on his YouTube channel.
 
 # Special Thanks to…
  * **Ben Eater** - For inspiring me to get into computer hardware as a hobby!
