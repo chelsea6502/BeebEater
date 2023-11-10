@@ -214,14 +214,10 @@ wait_4ms_inner_loop:
     JSR WAIT_SETUP
 
     ; Step 4: Send a third and final '00000011' (Hex $03).
-    ; No need to wait a certain amount of time like before, because the LCD's 'busy' flag van be checked after this.
+    ; No need to wait a certain amount of time like before, because the LCD's 'busy' flag can be checked after this.
 
     LDA #%00000011
-    STA PORTB
-    ORA #E
-    STA PORTB
-    AND #%00001111
-    STA PORTB
+    JSR lcd_instruction
 
     ; At this point we have completed the LCD reset sequence.
 
@@ -231,11 +227,7 @@ wait_4ms_inner_loop:
     ; Let's use 4-bit mode, because otherwise we would have to use PORTA, and that is reserved for the PS/2 keyboard.
 
     LDA #%00000010 ; Send the instruction to set 4-bit mode. 
-    STA PORTB
-    ORA #E ; Set the enable bit and send the same lower 4 bits.
-    STA PORTB
-    AND #%00001111
-    STA PORTB ; Clear the enable bit and send the same lower 4 bits.
+    JSR lcd_instruction
     
     ; Let's now send a series of options that will set it to configuration we want.
     ; By default, we want a 2 line display, a blinking cursor, and set to position 40: the start of the second line.
@@ -358,7 +350,6 @@ WAIT_SETUP: ; This is only needed for the Western Design Center (WDC) version of
     ; The bug means that we have to wait enough clock cycles to be sure that the byte has been transmitted fully before sending the next character.
     ; Assuming 1Mhz clock speed and 115200 baud rate, we need to loop WAIT_LOOP 18 times (#$12 in hex) before we can send the next character.
     ; Don't worry! At 115200 baud, the wait time is around 0.01 millisecond.
-    CLI
     PHX ; 3 clock cycles
     LDX #$12 ; Number of WAIT_LOOPs. Calculated by: ((1 / (baud rate)) * ((Clock rate in Hz) * 10) - 18) / 4
 WAIT_LOOP:
@@ -366,6 +357,7 @@ WAIT_LOOP:
     BNE WAIT_LOOP ; 2 clock cycles for every loop, plus an extra 1 to leave the loop.
     PLX ; 4 cycles. Called only once.
 OSWRCHV_RETURN: ; make sure this is still included if have commented WAIT_SETUP and WAIT_LOOP out
+    CLI
     RTS ; 6 cycles
 
 ; OSBYTE: 'OS Byte'
