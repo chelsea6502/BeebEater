@@ -48,7 +48,7 @@ BeebEater assumes you have the [standard Ben Eater 6502 build](https://eater.net
  * 6551 ACIA at $5000-5003 (with a 1.8432 Mhz external crystal)
  * 6522 VIA at $6000-600F
 
-_As of v0.4, BeebEater will not start with an LCD connected to PORTB on the 6522, and a PS/2 Keyboard connected to PORTA. I'm working on fixing this with a v0.4.1 release very soon._
+_As of v0.4, BeebEater will not start without the LCD connected to PORTB on the 6522, and a PS/2 Keyboard connected to PORTA. I'm working on fixing this with a v0.4.1 release very soon._
 
 **Don’t have RS-232?** You can connect the Rx and Tx pins to a [Serial to USB converter](https://www.jaycar.com.au/duinotech-arduino-compatible-usb-to-serial-adaptor/p/XC4464) like I do.
 
