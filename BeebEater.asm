@@ -90,6 +90,7 @@ bootMessageRAM: ; The second part of the first line.
 ; Setup BeebEater. The reset addresses of $FFFC and $FFFD point to here.
 ; Let's set any hardware-specific things here.
 reset:
+    SEI ; Disable interrupts
     ; -- Wipe Memory --
 
     ; In case we did a 'soft' reset where memory is preserved, let's wipe the previous state and start again.
@@ -100,18 +101,31 @@ reset:
     PLP ; PLP = "Pull status from stack". This essentially resets the status flags to 0.
 
     ; Wipe all the RAM
-    LDX #0
-    LDY #0
-reset_wipe_ram_loop:
-    STA ($00,X) ; Store the accumulator (which is already 0) to the effective address
-    INX ; Increment the low byte
-    BNE reset_wipe_ram_no_incy  ; If the low byte is not 0 (no overflow), skip the Y increment
-    INY ; Increment the high byte
-reset_wipe_ram_no_incy:
-    CPY #$40 ; Check if we've reached past $3FFF
-    BNE reset_wipe_ram_loop ; If we haven't, continue the loop
+    LDA #0
+    LDX #$3F
+    LDY #$00
+    STA $00
+wipe_outer:
+    STX $01
+wipe_inner:
+    DEY             ; Decrement counter
+    STA ($00),Y   ; Clear memory at address. High byte in address $01, low byte in Y register.
+    CPY #0
+    BNE wipe_inner ; Y is not zero? continue checking.
+wipe_outer_tail:
+    DEX
+    CPX #$00
+    BNE wipe_outer ; X is not zero? Continue outer loop.
 
-    SEI ; Disable interrupts
+wipe_zeropage:
+    LDY #0
+    STY $01
+    STY $00
+wipe_zeropage_loop:
+    DEY             ; Decrement counter
+    STA ($00),Y   ; Clear memory at address. High byte in address $01, low byte in Y register.
+    CPY #0
+    BNE wipe_zeropage_loop ; Y is not zero? continue checking.
 
     ; Reset registers just to be safe
     LDX #0
@@ -974,7 +988,7 @@ BRKV:
     RTS ; The error handler will return us to here. From there, let's return to where we were before the BRK.
 
 
-   .org $c480
+   .org $c500
 
 ; Keep this 14.2kb of EEPROM space open for the SAVE/LOAD feature in BeebEater v1.0.
 ; In other words, Everything above must be less than 1152 bytes. As of v0.4, we are currently at 1143 bytes. 
