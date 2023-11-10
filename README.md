@@ -12,6 +12,9 @@ _**BeebEater is designed for beginners. My goal for BeebEater is to be the go-to
 
 No extra modifications are required. All you need to do is load `BeebEater.rom` into EEPROM, and connect to serial!
 
+> [!WARNING]  
+> Consider BeebEater still in ALPHA until version v1.0 is released. Let me know of any issues you find by submitting a new issue in the "Issues" tab on this GitHub repo. If your issue is not already there, I don't know it exists yet. Thanks!
+
 # Features
 
 **BeebEater features:**
@@ -28,7 +31,7 @@ No extra modifications are required. All you need to do is load `BeebEater.rom` 
 ## Supported features
  * **Serial Terminal IO** - Interact with BBC BASIC via the serial terminal. 
  * **Keyboard** - Support for a PS/2 Keyboard connected to PORTA on the VIA.
- * **Error handling** from BBC BASIC.
+ * **Keyboard** - Support for a 16x2 LCD connected to PORTB on the VIA (4-bit mode).
  * **Backspace/Delete** on current input.
  * **Escape key** for leaving those happy little mistakes.
  * (CoolTerm Only) **Clear the serial terminal screen** using `CLS`.
@@ -42,15 +45,21 @@ No extra modifications are required. All you need to do is load `BeebEater.rom` 
 # Requirements
 ## Hardware
 BeebEater assumes you have the [standard Ben Eater 6502 build](https://eater.net/6502), with the standard memory mapping:
- * 65C02 MPU (with a 1Mhz clock)
+ * 65C02 Microprocessor (with a 1Mhz clock)
  * 32k ROM at $8000 to $FFFF
  * 16k RAM at $0000 to $3FFF
- * 6551 ACIA at $5000-5003 (with a 1.8432 Mhz external crystal)
+ * 6551 ACIA at $5000-5003 (115200 Baud, with a 1.8432 Mhz external crystal)	
  * 6522 VIA at $6000-600F
+   	* [PS/2 Keyboard](https://www.youtube.com/watch?v=w1SB9Ry8_Jg) on PORTA (Pins 2-9)
+   	* LCD (4-bit mode) on PORTB (Pins 10-16)
 
-_As of v0.4, BeebEater will not start without the LCD connected to PORTB on the 6522, and a PS/2 Keyboard connected to PORTA. I'm working on fixing this with a v0.4.1 release very soon._
+![Ben Eater 6502 Schematic Diagram](https://eater.net/schematics/6502-serial.png)
 
-**Don’t have RS-232?** You can connect the Rx and Tx pins to a [Serial to USB converter](https://www.jaycar.com.au/duinotech-arduino-compatible-usb-to-serial-adaptor/p/XC4464) like I do.
+### Required Hardware Adjustments
+
+BeebEater follows the same schematic as the Ben Eater one shown above, but with two minor additions: 
+ 1. Connect the PS/2 keyboard to the PA0-PA7 pins (Pins 2-9) on the VIA, as per [Ben's keyboard video.](https://www.youtube.com/watch?v=w1SB9Ry8_Jg)
+ 2. **VERY IMPORTANT:** Don't have the LCD and/or Keyboard connected? Send any unused/unconnected PA and PB pins from the VIA (Pins 2-17 on the W65C22) directly to ground. Otherwise, BeebEater will get confused about the 'floating' state pins and won't run.
 
 ## Serial monitor
 I recommend [**CoolTerm**](https://freeware.the-meiers.org) as your serial monitor application. It’s free, open source, cross-platform, and natively handles backspace/delete. Open `BeebEater_CoolTerm.cts` inside CoolTerm, you’ll have all the settings you need preloaded.
