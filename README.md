@@ -28,7 +28,7 @@ No extra modifications are required. All you need to do is load `BeebEater.rom` 
 ## Supported features
  * **Serial Terminal IO** - Interact with BBC BASIC via the serial terminal. 
  * **Keyboard** - Support for a PS/2 Keyboard connected to PORTA on the VIA.
- * **Error handling** from BBC BASIC.
+ * **Keyboard** - Support for a 16x2 LCD connected to PORTB on the VIA (4-bit mode).
  * **Backspace/Delete** on current input.
  * **Escape key** for leaving those happy little mistakes.
  * (CoolTerm Only) **Clear the serial terminal screen** using `CLS`.
@@ -46,11 +46,12 @@ BeebEater assumes you have the [standard Ben Eater 6502 build](https://eater.net
  * 32k ROM at $8000 to $FFFF
  * 16k RAM at $0000 to $3FFF
  * 6551 ACIA at $5000-5003 (with a 1.8432 Mhz external crystal)
+	* LCD on PORTB
+	* PS/2 Keyboard on PORTA	
  * 6522 VIA at $6000-600F
 
-_As of v0.4, BeebEater will not start without the LCD connected to PORTB on the 6522, and a PS/2 Keyboard connected to PORTA. I'm working on fixing this with a v0.4.1 release very soon._
-
-**Don’t have RS-232?** You can connect the Rx and Tx pins to a [Serial to USB converter](https://www.jaycar.com.au/duinotech-arduino-compatible-usb-to-serial-adaptor/p/XC4464) like I do.
+> [!WARNING]  
+> **VERY IMPORTANT: Connect any unused 6522 VIA PORTA and PORTB pins (Pins 2-17 on the W65C22) to ground.** Otherwise, BeebEater will get confused and won't run.
 
 ## Serial monitor
 I recommend [**CoolTerm**](https://freeware.the-meiers.org) as your serial monitor application. It’s free, open source, cross-platform, and natively handles backspace/delete. Open `BeebEater_CoolTerm.cts` inside CoolTerm, you’ll have all the settings you need preloaded.
