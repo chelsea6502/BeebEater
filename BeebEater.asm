@@ -129,7 +129,13 @@ wipe_zeropage_loop:
 
     ; Reset registers just to be safe
     LDX #0
-    LDY #0 
+    LDY #0
+
+    ; Set the minimum and maximum ASCII ranges for printing to the LCD or serial.
+    LDA #$20 ; Minimum is $20, starting with the space character
+    STA $02B4
+    LDA #$FF ; Maximum ASCII is $7F, but we can use $FF too.
+    STA $02B5
 
     ; -- ACIA 6551 Initialisation --
 
