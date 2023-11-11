@@ -26,7 +26,7 @@ No extra modifications are required. All you need to do is load `BeebEater.rom` 
  * **Modern programming concepts** - BBC BASIC uses modern programming concepts such as `IF`, `WHILE`, `FOR` and even functions with `DEF PROC`.
  * **Built-in assembler** - Supports executing assembly code. **That's right, you can program your 6502 USING your 6502!**
  * **It's fast** - BBC BASIC is famous for being one of the best perfoming BASIC interpreters for the 6502.
- * **Native LCD and PS/2 Keyboard support** LCD with a PS/2 Keyboard turns your 6502 build into (at least in theory) a fully independent computer!
+ * **Native LCD and PS/2 Keyboard support** - LCD with a PS/2 Keyboard turns your 6502 build into a fully independent computer!
 
 ## Supported features
  * **Serial Terminal IO** - Interact with BBC BASIC via the serial terminal. 
