@@ -10,7 +10,7 @@ BBC BASIC is the BASIC interpreter found in the [BBC Micro Computer](https://en.
 
 _**BeebEater is designed for beginners. My goal for BeebEater is to be the go-to recommendation for those who ask "What OS should I install on my 6502?"**_
 
-No extra modifications are required. All you need to do is load `BeebEater.rom` into EEPROM, and connect to serial!
+No extra modifications are required. All you need to do is load `BeebEater.rom` into EEPROM, and then reset.
 
 > [!WARNING]  
 > Consider BeebEater still in ALPHA until version v1.0 is released. Let me know of any issues you find by submitting a new issue in the "Issues" tab on this GitHub repo. If your issue is not already there, I don't know it exists yet. Thanks!
@@ -26,12 +26,12 @@ No extra modifications are required. All you need to do is load `BeebEater.rom` 
  * **Modern programming concepts** - BBC BASIC uses modern programming concepts such as `IF`, `WHILE`, `FOR` and even functions with `DEF PROC`.
  * **Built-in assembler** - Supports executing assembly code. **That's right, you can program your 6502 USING your 6502!**
  * **It's fast** - BBC BASIC is famous for being one of the best perfoming BASIC interpreters for the 6502.
- * **Native LCD and PS/2 Keyboard support** LCD with a PS/2 Keyboard turns your 6502 build into (at least in theory) a fully independent computer!
+ * **Native LCD and PS/2 Keyboard support** - LCD with a PS/2 Keyboard turns your 6502 build into a fully independent computer!
 
 ## Supported features
  * **Serial Terminal IO** - Interact with BBC BASIC via the serial terminal. 
  * **Keyboard** - Support for a PS/2 Keyboard connected to PORTA on the VIA.
- * **Keyboard** - Support for a 16x2 LCD connected to PORTB on the VIA (4-bit mode).
+ * **LCD** - Support for a 16x2 LCD connected to PORTB on the VIA (4-bit mode).
  * **Backspace/Delete** on current input.
  * **Escape key** for leaving those happy little mistakes.
  * (CoolTerm Only) **Clear the serial terminal screen** using `CLS`.
@@ -55,11 +55,12 @@ BeebEater assumes you have the [standard Ben Eater 6502 build](https://eater.net
 
 ![Ben Eater 6502 Schematic Diagram](https://eater.net/schematics/6502-serial.png)
 
-### Required Hardware Adjustments
+### Required Additional Hardware Adjustments
 
 BeebEater follows the same schematic as the Ben Eater one shown above, but with two minor additions: 
  1. Connect the PS/2 keyboard to the PA0-PA7 pins (Pins 2-9) on the VIA, as per [Ben's keyboard video.](https://www.youtube.com/watch?v=w1SB9Ry8_Jg)
- 2. **VERY IMPORTANT:** Don't have the LCD and/or Keyboard connected? Send any unused/unconnected PA and PB pins from the VIA (Pins 2-17 on the W65C22) directly to ground. Otherwise, BeebEater will get confused about the 'floating' state pins and won't run.
+ 2. Connect the PS/2 keyboard's rising edge interrrupt signal to the CA1 pin on the VIA, as per [Ben's keyboard video.](https://www.youtube.com/watch?v=w1SB9Ry8_Jg)
+ 3. **VERY IMPORTANT:** Don't have the LCD and/or Keyboard connected? Send any unused/unconnected PA and PB pins from the VIA (Pins 2-17 on the W65C22) directly to ground. Otherwise, BeebEater will get confused about the 'floating' state pins and won't run.
 
 ## Serial monitor
 I recommend [**CoolTerm**](https://freeware.the-meiers.org) as your serial monitor application. It’s free, open source, cross-platform, and natively handles backspace/delete. Open `BeebEater_CoolTerm.cts` inside CoolTerm, you’ll have all the settings you need preloaded.
@@ -76,7 +77,7 @@ If you’re using some other non-CoolTerm serial monitor, you’ll likely need t
 If you have a standard Ben Eater 6502 memory mapping, everything is done for you. Just load the ROM, and go!
  1. Download the latest `BeebEater.rom` from the ‘Releases’ section in this GitHub page.
  2. Load `BeebEater.rom` into the start address of your EEPROM. At 32KB, this should take up the complete EEPROM.
- 3. Connect to a serial monitor, reset and run! 
+ 3. Reset and run! 
 
 If you want to make modifications to the code, you’ll need to assemble a new ROM using VASM. Use the following VASM flags to generate a new ROM:
 	
