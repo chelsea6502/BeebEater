@@ -1,27 +1,55 @@
-; BeebEater v0.4 - BBC BASIC for the Ben Eater 6502.
+; BeebEater v0.4 - BBC MOS for the Ben Eater 6502.
 ; by Chelsea Wilkinson (chelsea6502)
 ; https://github.com/chelsea6502/BeebEater
+
+; JGH: Handful of initial corrections.
 
 ; -- Constants --
 
 ; First, let's set some addresses...
-BASIC = $8000 ; the entry point for the BBC BASIC rom.
-START = $C000 ; the entry point for BeebEater
+BASIC = $8000 ; the entry point for language rom.
+START = $C000 ; the entry point for BeebEater.
 
-; BeebEater-specific memory addresses. $00-5F is reserved for BBC BASIC!
-READBUFFER = $60 ; this stores the latest ASCII character that was sent into the ACIA
-KEYBOARD_FLAGS = $61 ; This byte helps us keep track of the state of a key presses on the keyboard. See below.
-LCDREADBUFFER = $62 ; For storing the last printed ASCII character in the LCD.
-LCDCURSORBUFFER = $63 ; For storing the current LCD cursor position.
-LCDBUFFER = $64 ; ; For storing a line of LCD characters.
+; BBC MOS specific memory addresses.
+; $00-$8F Language workspace
+; $90-$9F Network workspace
+; $A0-$A7 NMI workspace
+; $A8-$AF Non-MOS *command workspace
+; $B0-$BF Temporary filing system workspace
+; $C0-$CF Persistant filing system workspace
+; $D0-$DF VDU driver workspace
+; $E0-$EB Internal MOS workspace
+; $EC-$EE Keyboard workspace
+; $EF-$FF MOS API workspace
+;
+OSVDU  =$D0
+OSKBD1 =$EC
+OSKBD2 =OSKBD1+1
+OSKBD3 =OSKBD1+2
+OSAREG =$EF
+OSXREG =$F0
+OXYREG =$F1
+OSCTRL =OSXREG
+OSLPTR =$F2
+OSINTA =$FC
+OSFAULT=$FD
+OSESC  =$FF
+OSVDUWS=$0300
+;
+;
+READBUFFER      = OSKBD1  ; this stores the latest ASCII character that was sent into the ACIA
+KEYBOARD_FLAGS  = OSKBD2  ; This byte helps us keep track of the state of a key presses on the keyboard. See below.
+LCDREADBUFFER   = OSVDU+2 ; For storing the last printed ASCII character in the LCD.
+LCDCURSORBUFFER = OSVDU+3 ; For storing the current LCD cursor position.
+LCDBUFFER       = OSVDUWS+0 ; For storing a line of LCD characters.
 
 ; Keyboard flag constants:
 RELEASE = %00000001 ; Flag for if a key has just been released.
 SHIFT   = %00000010 ; Flag for if we are holding down the shift key.
 
-; BBC BASIC-specific locations. These cannot be changed.
-TICKS = $0292 ; A 5-byte memory location ($0292-$0296) that counts the number of 'centiseconds' since booting up. We use this this for the TIME command.
+TICKS = $0292 ; A 5-byte memory location ($0292-$0296) that counts the number of 'centiseconds' since booting up. We use this this for the TIME function.
 
+; Hardware locations
 ; Next, let's define where our ACIA is. $5000 is the default.
 ACIA_DATA = $5000
 ACIA_STATUS = $5001 ; Status register
@@ -45,15 +73,17 @@ E  = %01000000
 RW = %00100000
 RS = %00010000
 
-; BBC BASIC "OS Calls". BBC BASIC jumps to these addresses when it wants to use your hardware for something.
+; BBC MOS "OS Calls". Code calls these addresses when it wants to use your hardware for something.
 OSASCI = $FFE3 ; "OS ASCII" - Print an ASCII character stored in Register A (Accumulator)
 OSNEWL = $FFE7 ; "OS New Line" - Print the 'CR' ASCII character, followed by the 'LF' character. These two characters make up a new line.
 OSWRCH = $FFEE ; "OS Write Character" - Print a byte stored in the Accumulator. This doesn't necessarily have to be an ASCII one.
-OSWORD = $FFF1 ; "OS Word" - This one is actually several system calls wrapped together. These system calls involve inputs more than one byte: a "word".
-OSBYTE = $FFF4 ; "OS Byte" - A group of system calls that have inputs of only one byte. This one is much simpler than OSWORD.
+OSWORD = $FFF1 ; "OS Word" - A group of system calls that have parameters passed in a control block pointed to by the XY registers.
+OSBYTE = $FFF4 ; "OS Byte" - A group of system calls that have byte parameters in the registers. This one is much simpler than OSWORD.
 
-; 6502-specific addresses
+; Hardware 6502-specific addresses
 NMI = $FFFA ; This is the entry point for when we trigger a 'Non-Maskable Interupt'. 
+RST = $FFFC ; RESET
+IRQ = $FFFE ; Maskable interupts
 
 ; -- Entry Points --
 
@@ -70,14 +100,14 @@ NMI = $FFFA ; This is the entry point for when we trigger a 'Non-Maskable Interu
 ; -- ROM Constants. Unlike the constants before, these are actually stored in the EEPROM. --
 
 ; Define the boot message. By default, you should see this at boot:
-;;; BBC Computer 16k
+;;; BeebEater Computer 16k
 ;;;
 ;;; BASIC
 ;;;
 ;;; >
 bootMessage: ; The first part of the first line.
     .byte $0D ; $OD is the "Carriage Return" (CR) ASCII character. 
-    .text "BBC Computer " ; Default value as it was on the original BBC Micro. Feel free to change this to whatever you want.
+    .text "BeebEater Computer " ; Describe the computer system.
     .byte $00 ; All strings must end with an ASCII NUL character.
 
 bootMessageRAM: ; The second part of the first line.
@@ -87,18 +117,20 @@ bootMessageRAM: ; The second part of the first line.
 
 ; -- Start of Program --
 
-; Setup BeebEater. The reset addresses of $FFFC and $FFFD point to here.
+; Set up BeebEater. The reset addresses of $FFFC and $FFFD point to here.
 ; Let's set any hardware-specific things here.
 reset:
     SEI ; Disable interrupts
+    CLD ; Ensure in binary
     ; -- Wipe Memory --
 
     ; In case we did a 'soft' reset where memory is preserved, let's wipe the previous state and start again.
 
     ; Reset the processor status
-    LDA #0
-    PHA ; Push A onto the stack
-    PLP ; PLP = "Pull status from stack". This essentially resets the status flags to 0.
+;    LDA #0
+;    PHA ; Push A onto the stack
+;    PLP ; PLP = "Pull status from stack". This essentially resets the status flags to 0.
+; *BUG* That also enbles IRQs!
 
     ; Wipe all the RAM
     LDA #0
@@ -127,15 +159,15 @@ wipe_zeropage_loop:
     CPY #0
     BNE wipe_zeropage_loop ; Y is not zero? continue checking.
 
-    ; Reset registers just to be safe
-    LDX #0
-    LDY #0
-
-    ; Set the minimum and maximum ASCII ranges for printing to the LCD or serial.
-    LDA #$20 ; Minimum is $20, starting with the space character
-    STA $02B4
-    LDA #$FF ; Maximum ASCII is $7F, but we can use $FF too.
-    STA $02B5
+;    ; Reset registers just to be safe
+;    LDX #0
+;    LDY #0
+;
+;    ; Set the minimum and maximum ASCII ranges for printing to the LCD or serial.
+;    LDA #$20 ; Minimum is $20, starting with the space character
+;    STA $02B4
+;    LDA #$FF ; Maximum ASCII is $7F, but we can use $FF too.
+;    STA $02B5
 
     ; -- ACIA 6551 Initialisation --
 
@@ -262,18 +294,19 @@ boot:
     STA TICKS + 3
     STA TICKS + 4
 
-    ; BBC BASIC stores the address of the 'write character' routine at $020E for quick access.
-    ; We need to tell BBC BASIC where it is so it can print anything.
-    LDA #>OSWRCH ; Get the upper two bytes of OSWRCH (FF)
-    STA $020F ; Store it in $020F. This is where BBC BASIC looks for the OSWRCH instruction.
-    LDA #<OSWRCH ; Load the lower two bytes of OSWRCH (EE)
-    STA $020E ; Store it in $020F
+    ; BBC MOS stores the address of the 'write character' routine at $020E for redirection.
+    ; BBC BASIC bypasses the API and calls the vector directly.
+    LDA #>OSWRCHV ; Get the high byte of destination
+    STA $020F ; Store it in $020F.
+    LDA #<OSWRCHV ; Get the low byte of the destination
+    STA $020E ; Store it in $020E
 
-    ; Send a "Form Feed" ASCII character. This clears the screen on CoolTerm.
+    ; Send a "Form Feed" ASCII character. This clears the screen.
     LDA #$0C
     JSR OSWRCH
 
     ; Let's print the boot message!
+    LDY #<bootMessage ; Start at start of messages
     LDA #>bootMessage ; Get the start address of where the first line of the boot message is.
     JSR printMessage ; Display the boot message.
     LDA #>bootMessageRAM ; Get the second line that describes how much RAM there is.
@@ -283,7 +316,7 @@ boot:
     JSR OSNEWL
     JSR OSNEWL
 
-    ; Get the 'ROM Title' that BBC BASIC stores at address $8009. By default this will display "BASIC".
+    ; Get the 'ROM Title' that is stored at address $8009.
     ; [TODO: Remember and explain why we need to subtract 1 from $8009]
     LDA #>($8009 - 1) ; High byte of '$8009 - 1' contains the address of first character of the string. Let's store that in A.
     LDY #<($8009 - 1) ; Low byte of '$8009 - 1' contains the address containing length of the string. Let's store that in Y.
@@ -295,18 +328,19 @@ boot:
 
     CLI ; Enable interrupts, now that we're done initialising all our memory and peripherals.
 
-    LDA #$01 ; Load '1' into the accumulator to tell BBC BASIC we want to enter the start of the ROM.
+    CLC ; CC to tell the language we are entering from RESET.
+    LDA #$01 ; Load '1' into the accumulator to tell the language we are starting up.
     JMP BASIC ; Enter the magical world of BBC BASIC
 
 ; Subroutine to print a string. Right now this is only used for the boot message.
 ; printMessage will start reading at the address stored in A, plus the raw value stored in Y.
 ; e.g. if A is "09" and Y is "4", printMessage will read the ASCII character stored at $8009 + 4 bytes (which is $800C).
 printMessage:
-    STA $FE ; Store the location of the address we want to print in $FE, which tells BBC BASIC where to start reading from.
+    STA $FE ; Store the high byte of the source address.
     LDA #00 ; Load 0 into A
-    STA $FD ; Store 0 into $FD, which tells BBC BASIC how much characters we have printed so far.
+    STA $FD ; Use $00 as the low byte of the address, using offset from Y for source.
 printMessageLoop:
-    INY ; Read the next character. If we just entered the loop, this initialises Y to 0.
+    INY ; Step to next character. On first pass will step to first char.
     LDA ($FD),Y ; Read the character at $FD, offset by the value of Y.
     JSR OSASCI ; Send the character to the ACIA to transmit out of the 'Tx' pin.
     CMP #$00 ; A '0' lets BBC Basic know when to stop reading. Let's check if that's the case.
@@ -317,31 +351,33 @@ printMessageLoop:
 ; -- OS Call Routines --
 
 ; OSRDCH: 'OS Read Character'
-; This subroutine waits for a character to arrive from the ACIA, then stores it into the A register for another subroutine to read.
-; We use this to send input from your keyboard to BBC BASIC.
-; It also checks if the escape key has been pressed. If it has, it lets BBC BASIC know that it needs to leave whatever it's running.
-OSRDCH:
+; This subroutine waits for a character to arrive from the ACIA, then returns it in A. Cy=Esc pressed.
+; We use this to receive input from your keyboard to the the caller.
+; It also checks if the escape key has been pressed. If it has, it lets the caller know so it needs to leave whatever it's running.
+OSRDCHV:
     ; First, check for escape flag
-    LDA #0 ; Reset A just to be safe
-    BIT $FF ; if the escape flag set?
+;    LDA #0 ; Reset A just to be safe
+    BIT OSESC ; if the escape flag set?
     BMI escapeCondition ; Skip reading and jump to escape handling.
 
     ; If there's no escape flag set, let's check the READBUFFER to see if it's full.
     ; We don't read the ACIA directly here. We use the IRQ interrupt handler to read the character and place it into READBUFFER.
-    ; A full READBUFFER essentially means that there's a character that's been sent to the ACIA that hasn't been displayed yet.
+    ; A full READBUFFER essentially means that there's a character that's been received by the ACIA that hasn't been read yet.
     LDA READBUFFER ; Is there something in the buffer?
-    CMP #0 ; Is the buffer empty?
-    BEQ OSRDCH ; If it's still empty, keep waiting.
+    BEQ OSRDCHV ; If it's still empty, keep waiting.
+    CMP #$1B
+    BEQ escapeCondition ; Escape key pressed
     PHA ; Otherwise, it's full. Let's save A to the stack so we can use it for later.
     LDA #0
     STA READBUFFER ; Clear the character buffer
     PLA ; Restore A from the stack
+    CLC ; CC=Not Escape
     RTS ; Return to the main routine
 escapeCondition:
     ; If we're here, that means that the user just pressed the escape key. This should signal to BBC BASIC to stop whatever it's doing.
     LDA #0
     STA READBUFFER ; clear the character buffer by writing '0' to it
-    SEC ; Set the carry bit, which BASIC reads as the escape condition is set.
+    SEC ; CS=Escape key pressed
     LDA #$1B ; Load the 'ESC' ASCII character into A.
     RTS
 
@@ -350,6 +386,7 @@ escapeCondition:
 ; The 'V' in "OSWRCHV" means "Vector". When BBC BASIC jumps to the OSWRCH address, it jumps straight to here.
 OSWRCHV:
     STA ACIA_DATA ; Send the character to the ACIA where it will immediately try to transmit it through 'Tx'.
+    PHP ; Save caller's interupt state
     SEI ; Disable interrupts while we are printing a character.
     JSR print_char ; Also print the same character to the LCD.
 WAIT_SETUP: ; This is only needed for the Western Design Center (WDC) version of the 6551 ACIA, thanks to the famous bug where the 'transmit register full' bit doesn't work properly.
@@ -363,17 +400,18 @@ WAIT_LOOP:
     BNE WAIT_LOOP ; 2 clock cycles for every loop, plus an extra 1 to leave the loop.
     PLX ; 4 cycles. Called only once.
 OSWRCHV_RETURN: ; make sure this is still included if have commented WAIT_SETUP and WAIT_LOOP out
-    CLI
+    PLP ; Restore caller's interupt state
     RTS ; 6 cycles
 
 ; OSBYTE: 'OS Byte'
 ; A group of system calls that only involve up to two bytes into the X and Y registers.
 ; Which system call to do is determined by whatever value is currently in the A register.
 ; There are much more OSBYTE system calls, but we only need three for the time being:
+; On exit: A=preserved, X=any return value, Y=any return value for calls >$7F else preserved, Cy=any return value for calls >$7F
     ; OSBYTE $7E: "Acknowledge Escape" - Handles how BBC BASIC leaves what it's doing when the user presses the escape key.
-    ; OSBYTE $84: "Read HIMEM" - This tells BBC BASIC the maximum memory address we can use for BASIC programs. $4000 by default
-    ; OSBYTE $83: "Read OSHWM" - This tells BBC BASIC the minimum memory address we can use for BASIC programs (A.K.A the start of 'PAGE' memory). 
-        ; $0800 by default, because we need to reserve $0000-$0800 for BBC BASIC.
+    ; OSBYTE $84: "Read HIMEM" - This tells the caller the maximum memory address we can use for BASIC programs. $4000 by default
+    ; OSBYTE $83: "Read OSHWM" - This tells the caller the minimum memory address we can use for BASIC programs (A.K.A the start of 'PAGE' memory). 
+        ; $0800 by default, because we need to reserve $0100-$03FF for the MOS, and $400-$7FF for fixed space for the language.
 OSBYTEV: 
     CMP #$7E ; is it the 'acknowledge escape' system call?
     BEQ OSBYTE7E ; Jump to the 'acknowledge escape' routine.
@@ -384,13 +422,12 @@ OSBYTEV:
     RTS ; Otherwise, return with nothing. 
 
 OSBYTE7E: ; Routine that 'acknowledges' the escape key has been pressed.
-    LDA #0 ; Reset A
     LDX #0 ; Reset X
     BIT $FF   ; check for the ESCAPE flag. 'BIT' just checks bit 7 and 6.
     BPL clearEscape  ; if there's no ESCAPE flag then just clear the ESCAPE condition.
     LDX #$FF   ; If escape HAS been pressed, set X=$FF to indicate ESCAPE has been acknowledged
 clearEscape:
-    CLC    ; Clear the carry bit to let BBC BASIC know there's no more escape key to process.
+    CLC    ; Clear the carry bit to let caller know there's no more escape state to process.
     ROR $FF ; set/clear bit 7 of ESCAPE flag
     RTS 
 
@@ -401,22 +438,23 @@ OSBYTE84: ; Routine to return the highest address of free RAM space.
     RTS
 
 OSBYTE83: ; Routine to return the lowest address of free RAM space.
-    ; Put address '$0800' in YX registers. Anything below $0800 is memory space reserved by BBC Basic.
+    ; Put address '$0800' in YX registers. Anything below $0800 is memory space reserved by BBC MOS.
     LDY #$08 ; High byte goes into Y
     LDX #$00  ; Low byte goes into X
     RTS
 
 ; OSWORD: 'OS Word'
 ; A group of system calls that involves more than just a couple of bytes, but an area in RAM.
-; BBC Basic uses 'Control Blocks' to define a sequence of bytes. They're a bit hard to explain, but all you need to know right now is that it's an area in RAM.
+; BBC MOS uses 'Control Blocks' to define a sequence of bytes. They're a bit hard to explain, but all you need to know right now is that it's an area in RAM.
 ; There are much more OSWORD system calls, but we only need three for the time being:
-    ; OSWORD 0: "Read line from current input" - This is how BBC BASIC lets you input a command, and how it processes your command.
-    ; OSWORD 1: "Read system clock" - Get the number of 'centiseconds' since boot. This is called by the TIME command in BASIC.
+    ; OSWORD 0: "Read line from current input" - This is how BBC MOS lets you input a line of text.
+    ; OSWORD 1: "Read system clock" - Get the number of 'centiseconds' since boot. This is called by the TIME function in BASIC.
     ; OSWORD 2: "Write system clock" - Set the number of 'centiseconds' since boot to a certain value. This is called by "TIME=[value]" in BASIC.
 OSWORDV:
+    PHP  ; Preserve caller's IRQ state.
 	SEI	 ; Disable interrupts for now, so we don't change a character mid-print.
 	
-    ; Load A, X, and Y registers by storing them into short-term memory.
+    ; Store A, X, and Y registers in MOS API workspace.
 	STA	$EF	
 	STX	$F0				
 	STY	$F1				
@@ -427,7 +465,9 @@ OSWORDV:
     BEQ OSWORD1V    ; Jump to it if yes
     CMP #$02        ; Is it the 'Write Clock' system call?
     BEQ OSWORD2V    ; Jump to it if yes
+    PLP             ; Restore caller's IRQs
     RTS             ; Otherwise, return with no change.
+
 OSWORD0V:
     STA READBUFFER ; Write a '0' to the character buffer, in case there's an escape character currently in there. Kind of a hacky solution, but it works!
 
@@ -449,13 +489,13 @@ osword0setup:
     LDA ($F0),Y ; Get value (high byte) from zero-page. Y is 1 right now.
     STA $E9 ; Store into temporary buffer (high byte)
 
-    LDY #$00
-    STY $0269 ; [store 0 in 'paged mode counter'?]
+;    LDY #$00
+;    STY $0269 ; [store 0 in 'paged mode counter'?]
 
     LDA ($F0),Y ; Get value (low byte) from zero-page
     STA $E8 ; Store into temporary buffer (low byte)
 
-    CLI ; Enable interrupts
+    CLI ; Explicitly enable interrupts to allow background keypress processing
     BCC readInputCharacter
 
 readLineInputBufferFull:
@@ -468,6 +508,7 @@ outputAndReadAgain:
     JSR OSWRCH ; Print the character. Fall through to 'readInputCharacter'
 readInputCharacter:
     JSR OSRDCH ; Read the next character from ACIA
+    BCS Escape
 
     CMP #$08 ; Is it a backspace? Let's delete the last character.
     BEQ delete
@@ -479,20 +520,18 @@ delete:
     CPY #0 ; Are we at the first character?
     BEQ readInputCharacter ; Then do nothing
     DEY ; Otherwise, go back 1
-    BCS outputAndReadAgain ; Write the delete character. Go bback to the start.
+    BCS outputAndReadAgain ; Write the delete character. Go back to the start.
 checkLowercase: 
-    CMP #$61        ; Compare with 'a'
-    BCC notLower    ; If less than 'a', it's not a lowercase letter
-    CMP #$7B        ; Compare with 'z'
-    BCS notLower    ; If greater than 'z', it's not a lowercase letter
-    AND #$DF        ; Clear the 5th bit to convert to uppercase
+;    CMP #$61        ; Compare with 'a'
+;    BCC notLower    ; If less than 'a', it's not a lowercase letter
+;    CMP #$7B        ; Compare with 'z'
+;    BCS notLower    ; If greater than 'z', it's not a lowercase letter
+;    AND #$DF        ; Clear the 5th bit to convert to uppercase
 notLower:
     STA ($E8),Y ; store character into the buffer
     CMP #$0D ; is it the newline character?
     BEQ newLineAndExit ; then finish
 
-    CMP #$1B ; is it the escape key?
-    BEQ Escape
 continueRead:
     CPY $02B3 ; check current length against max word length
     BCS readLineInputBufferFull ; send a bell character if full
@@ -507,29 +546,34 @@ continueRead:
     BCS retryWithoutIncrement
 newLineAndExit:
     JSR OSNEWL
-    LDA $FF ; set escape flag
+    PLP ; Restore flags
+    LDA $FF ; Get escape flag
     ROL ; Put bit 7 into the carry bit in the status register
+    RTS
 Escape:
+    PLP
+    SEC
     RTS
 
 ; OSWORD 1: Read System Timer
 ; The variable TIME is a 5-byte variable starting at address 'TICKS'.
-; To read the timer, let's loop through the 5 bytes and store them in $F0-$F4, which BBC BASIC reads from.
+; To read the timer, let's loop through the 5 bytes and store them in the control block
 OSWORD1V:
     LDX #0                              
 readTimer:
     LDY #4 ; Use this to read the 5 bytes. This will run down from 4 to 0.
 readTimerLoop:
     LDA TICKS,X ; Load the TICKS byte, offset by X. X will be either 0, 1, 2, 3, or 4.
-    STA ($F0),Y ; Store into $F0, offset by Y. Y will be either 4, 3, 2, 1, or 0.               
+    STA ($F0),Y ; Store into control block offset by Y. Y will be either 4, 3, 2, 1, or 0.               
     INX                                                
     DEY                 
     BPL readTimerLoop ; Loop while Y is still greater than 0. BPL = "Branch on PLus"
+    PLP ; Restore caller's IRQ state
     RTS
 
 ; OSWORD 2: Write System Timer
 ; To write the timer, let's essentially do the opposeite of 'Read System Timer'
-; Let's loop through the 5 bytes in $F0-$F4, and store them in the 5-byte variable starting at address 'TICKS'.
+; Let's loop through the 5 bytes in control block, and store them in the 5-byte variable starting at address 'TICKS'.
 OSWORD2V:
     LDX #0
     LDY #4
@@ -539,6 +583,7 @@ writeTimerLoop:
     INX
     DEY
     BPL writeTimerLoop
+    PLP ; Restore caller's IRQ state
     RTS
 
 ; -- Keyboard Interrupt Routines --
@@ -611,7 +656,7 @@ push_key:
     STA READBUFFER ; Store the ASCII into READBUFFER
     CMP #$1B ; Is the character an escape character?
     BNE keyboard_interrupt_exit ; If not, we are done.
-    LDA #$FF ; If it IS the escape character, we need to signal that we want to leave the currently running BASIC program. 
+    LDA #$FF ; If it IS the escape character, we need to signal that an escape state is active. 
     STA $FF ; set the 'escape flag' address at $FF to the value #$FF.
     JMP keyboard_interrupt_exit ; We are done.
 
@@ -776,25 +821,26 @@ print_char:
     BEQ lcd_print_backspace ; Go to the backspace handler.
     CMP #$0C ; is it the 'Form Feed' character? This is how we clear the screen.
     BEQ lcd_clear_screen
-    CMP #$0D ; is it a newline character?
+    CMP #$0D ; is it a carriage return?
     BEQ lcd_print_enter  ; Go to the enter handler.
 
-    ; Check that the value is in ASCII range before attempting to print it.
-    CMP $02B4 ; check minimum ASCII character
-    BCC print_char_exit
-    CMP $02B5 ; check maximum ASCII character
-    BCS print_char_exit ; If it's not in the range, let's leave early.
+;    ; Check that the value is in ASCII range before attempting to print it.
+; This is part of OSWORD0 not OSWRCH
+;    CMP $02B4 ; check minimum ASCII character
+;    BCC print_char_exit
+;    CMP $02B5 ; check maximum ASCII character
+;    BCS print_char_exit ; If it's not in the range, let's leave early.
 
     JMP print_ascii ; Otherwise, let's print it.
+    
 print_char_exit:
     JMP exit_lcd ; This is a JMP instead of a branch because the exit_lcd routine address is too far away from here to branch.
 lcd_print_escape:
     LDA #%00000001 ; If the escape character was pressed, let's clear the display.
     JSR lcd_instruction
-    LDA #$1B ; Place an 'Escape' ASCII character in the accumulator to signal to other routines that we pressed the escape key.
     JMP exit_lcd ; Leave early.
 lcd_clear_screen:
-    LDA #%00000001 ; If the 'CLS' command was sent in BBC BASIC, let's clear the display.
+    LDA #%00000001 ; If the 'CLS' command was sent, let's clear the display.
     JSR lcd_instruction
     LDA #%11000000 ; Put cursor at the start of the second line (Position 40)
     JSR lcd_instruction
@@ -862,7 +908,7 @@ lcd_print_backspace:
     CMP #$6F ; if we are at the very end of the 2nd line's buffer, we should not be shifting.
     BEQ exit_lcd
 
-    ; If we are here, this means we pressed backspace while out of the main view. We need to shuffle the display back.
+    ; If we are here, this means we moved backspace while out of the main view. We need to shuffle the display back.
 
     ; Shift display right to compensate for the backspace.
     LDA #%00011100
@@ -908,7 +954,7 @@ print_ascii:
 exit_lcd:
     PLA ; Get back the original value of A
     ; We just used the carry bit for conditional branching. 
-    ; We need to clear the carry bit afterwards because BBC BASIC reserved the carry bit for escape handling.
+    ; We need to clear the carry bit afterwards because the carry bit indicates escape handling.
     CLC ; CLC = "CLear Carry"
     RTS ; Return to where we were before.
 
@@ -918,6 +964,7 @@ exit_lcd:
 ; Subroutine called after every NMI or IRQ in hardware, or the BRK instruction in software.
 interrupt:
     STA $FC ; Save A for later.
+    CLD ; Ensure we are operating in binary.                    
     PLA ; get status register. it's on the stack at this point
     PHA ; put the status flags back on the stack
     AND #$10 ; Check if it's a BRK or an IRQ.
@@ -955,35 +1002,33 @@ irq_via_tick: ; If we've ruled out the ACIA, then let's assume it was the VIA ti
     INC TICKS
 end_irq:
     LDA $FC ; Restore what was in the A register before we were so rudely interrupted
-    RTI ; "ReTurn from Interrupt"
+    RTI ; "ReTurn from Interrupt" Restore caller's flags, return to caller.
 
 
 ; -- BREAK Handler --
 
-; Handler for interrupts that we know were called by the BRK instruction. This likely means that there was an error called by BBC BASIC.
-; BBC BASIC has a way of telling us the error message. To get the message, we need to store the location of the error message into addresses $FD and $FE. 
+; Handler for interrupts that we know were called by the BRK instruction. This means an error was reported.
+; The BBC MOS API defines the structure of an error message. To get the message, we need to store the location of the error message in addresses $FD and $FE. 
 BRKV:
     TXA ; Save X to the stack, so we can restore it later
     PHA
 
     TSX             ; Get the value of the stack pointer and store it in X
     LDA $0100 + 3,X ; Get the low byte of the error message. This is stored in the stack.
-    CLD             ; "Clear Decimal Mode". I don't know what this does, but the original BBC Micro does this so I left it in.                    
     SEC             ; Set the carry bit in the 6502 status register.
-    SBC #1          ; Subtract 1. SBC = "SuBtract if Carry set". This will always subtract 1 because we just set it. TODO: Investigate why we need to subtract 1.
+    SBC #1          ; Subtract 1. SBC = "SuBtract if Carry set". This will always subtract 1 because we just set it. Need to subtract one as BRK stacks address of BRK+2 rather than the BRK+1 that we need.
     STA $FD         ; Store it into $FD
     
     LDA $0100 + 4,X ; Get the high byte of the error message. This is stored in the stack.
-    SBC #0          ; Subtract 1 if the carry bit is set. TODO: Investigate why we need to subtract 1.
+    SBC #0          ; Subtract 1 if the carry bit is set.
     STA $FE         ; Store high byte into $FE
-    STX $F0         ; Store the return address into $F0.
+    STX $F0         ; Store the stack pointer in $F0.
 
     PLA             ; Restore the original value of X
     TAX                 
 
-    ; Call BBC BASIC's error handler, which takes it from there. It's stored in $0202.
+    ; Jump to current error handler, which takes it from there. It's stored in $0202.
     JMP ($0202)     
-    RTS ; The error handler will return us to here. From there, let's return to where we were before the BRK.
 
 
    .org $c500
@@ -1029,12 +1074,30 @@ keymap_shifted:
     .byte "????????????????" ; F0-FF
 
 
-    ; BBC BASIC system calls. BBC BASIC calls these by jumping to their place in memory.
+    ; BBC MOS system calls. Code call these by jumping to their place in memory.
     ; Most of them jump to a 'vector' that properly handles the system call.
-    .org OSASCI
-    CMP #$0D ; Is it the 'Enter' key? Jump to OSNEWL, otherwise fall through to OSWRCH.
+    
+    .org $FFB6
+    .byte 0,0,0 ; no vector table
+    .byte $60,$60,$60 ; FFB9
+    .byte $60,$60,$60 ; FFBC
+    .byte $60,$60,$60 ; FFBF
+    .byte $60,$60,$60 ; FFC2
+    .byte $60,$60,$60 ; FFC5
+    .byte $60,$60,$60 ; FFC8
+    .byte $60,$60,$60 ; FFCB
+    .byte $60,$60,$60 ; FFCE
+    .byte $60,$60,$60 ; FFD1
+    .byte $60,$60,$60 ; FFD4
+    .byte $60,$60,$60 ; FFD7
+    .byte $60,$60,$60 ; FFDA
+    .byte $60,$60,$60 ; FFDD
+
+    JMP OSRDCHV ; FFE0
+    .org OSASCI ; FFE3
+    CMP #$0D ; Is it carriage return? Jump to OSNEWL, otherwise fall through to OSWRCH.
     BNE OSWRCH
-    ; If it's the enter key, fall through to OSNEWL
+    ; If it's carriage return, fall through to OSNEWL
 
     .org OSNEWL ; OSNEWL is essentially OSWRCH, but with a line break (CR+LF)
     LDA #$0A ; Send 'Carriage Return' character.
@@ -1043,13 +1106,14 @@ keymap_shifted:
     ; fall through to OSWRCH
 
     .org OSWRCH
-    JMP OSWRCHV ; At address 'OSWRCH', jump to the 'OSWRCH' routine (AKA a 'vector').
+    JMP OSWRCHV ; At address 'OSWRCH', jump to the 'OSWRCHV' routine (AKA a 'vector').
 
     .org OSWORD
     JMP OSWORDV
 
     .org OSBYTE
     JMP OSBYTEV
+    .byte $60,$60,$60 ; FFF7
 
     ; 6502-specific calls, such as interrupts and resets.
     .org NMI
