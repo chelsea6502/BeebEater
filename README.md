@@ -47,16 +47,15 @@ BeebEater assumes you have the [standard Ben Eater 6502 build](https://eater.net
  * 16k RAM at $0000 to $3FFF
  * 6551 ACIA at $5000-5003 (115200 Baud, with a 1.8432 Mhz external crystal)	
  * 6522 VIA at $6000-600F
-   	* PS/2 Keyboard on PORTA
-   	* LCD on PORTB
-
+   	* [PS/2 Keyboard](https://www.youtube.com/watch?v=w1SB9Ry8_Jg) on PORTA (Pins 2-9)
+   	* LCD (4-bit mode) on PORTB (Pins 10-16)
 
 ![Ben Eater 6502 Schematic Diagram](https://eater.net/schematics/6502-serial.png)
 
 ### Required Hardware Adjustments
 
 BeebEater follows the same schematic as the Ben Eater one shown above, but with two minor additions: 
- 1. Connect the PS/2 keyboard's shift registers to the PA0-PA7 pins (Pins 2-9) on the VIA.
+ 1. Connect the PS/2 keyboard to the PA0-PA7 pins (Pins 2-9) on the VIA, as per [Ben's keyboard video.](https://www.youtube.com/watch?v=w1SB9Ry8_Jg)
  2. **VERY IMPORTANT:** Don't have the LCD and/or Keyboard connected? Send any unused/unconnected PA and PB pins from the VIA (Pins 2-17 on the W65C22) directly to ground. Otherwise, BeebEater will get confused and won't run.
 
 ## Serial monitor
