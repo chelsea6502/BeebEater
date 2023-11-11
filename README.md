@@ -10,7 +10,7 @@ BBC BASIC is the BASIC interpreter found in the [BBC Micro Computer](https://en.
 
 _**BeebEater is designed for beginners. My goal for BeebEater is to be the go-to recommendation for those who ask "What OS should I install on my 6502?"**_
 
-No extra modifications are required. All you need to do is load `BeebEater.rom` into EEPROM, reset, and run.
+No extra modifications are required. All you need to do is load `BeebEater.rom` into EEPROM, and then reset.
 
 > [!WARNING]  
 > Consider BeebEater still in ALPHA until version v1.0 is released. Let me know of any issues you find by submitting a new issue in the "Issues" tab on this GitHub repo. If your issue is not already there, I don't know it exists yet. Thanks!
