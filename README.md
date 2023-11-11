@@ -55,7 +55,7 @@ BeebEater assumes you have the [standard Ben Eater 6502 build](https://eater.net
 
 ### Required Hardware Adjustments
 
-BeebEater follows the same schematic as the Ben Eater one shows above, but with two minor additions: 
+BeebEater follows the same schematic as the Ben Eater one shown above, but with two minor additions: 
  1. Connect the PS/2 keyboard's shift registers to the PA0-PA7 pins (Pins 2-9) on the VIA.
  2. **VERY IMPORTANT:** Connect any unused/unconnected PA and PB pins from the VIA (Pins 2-17 on the W65C22) directly to ground. Otherwise, BeebEater will get confused and won't run.
 
