@@ -77,7 +77,7 @@ If you’re using some other non-CoolTerm serial monitor, you’ll likely need t
 If you have a standard Ben Eater 6502 memory mapping, everything is done for you. Just load the ROM, and go!
  1. Download the latest `BeebEater.rom` from the ‘Releases’ section in this GitHub page.
  2. Load `BeebEater.rom` into the start address of your EEPROM. At 32KB, this should take up the complete EEPROM.
- 3. Connect to a serial monitor, reset and run! 
+ 3. Reset and run! 
 
 If you want to make modifications to the code, you’ll need to assemble a new ROM using VASM. Use the following VASM flags to generate a new ROM:
 	
