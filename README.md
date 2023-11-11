@@ -42,7 +42,7 @@ No extra modifications are required. All you need to do is load `BeebEater.rom` 
 # Requirements
 ## Hardware
 BeebEater assumes you have the [standard Ben Eater 6502 build](https://eater.net/6502), with the standard memory mapping:
- * 65C02 MPU (with a 1Mhz clock)
+ * 65C02 Microprocessor (with a 1Mhz clock)
  * 32k ROM at $8000 to $FFFF
  * 16k RAM at $0000 to $3FFF
  * 6551 ACIA at $5000-5003 (with a 1.8432 Mhz external crystal)
@@ -50,8 +50,13 @@ BeebEater assumes you have the [standard Ben Eater 6502 build](https://eater.net
 	* PS/2 Keyboard on PORTA	
  * 6522 VIA at $6000-600F
 
-> [!WARNING]  
-> **VERY IMPORTANT: Connect any unused 6522 VIA PORTA and PORTB pins (Pins 2-17 on the W65C22) to ground.** Otherwise, BeebEater will get confused and won't run.
+![Ben Eater 6502 Schematic Diagram](https://eater.net/schematics/6502.png)
+
+### Additional Hardware Adjustments
+
+BeebEater follows the same schematic as Ben Eater, but with two minor adjustments: 
+ 1. Connect the PS/2 keyboard's shift registers to the PA0-PA7 pins (Pins 2-9) on the VIA.
+ 2. **VERY IMPORTANT:** Connect any unused/unconnected PA and PB pins on the VIA (Pins 2-17 on the W65C22) to ground. Otherwise, BeebEater will get confused and won't run.
 
 ## Serial monitor
 I recommend [**CoolTerm**](https://freeware.the-meiers.org) as your serial monitor application. It’s free, open source, cross-platform, and natively handles backspace/delete. Open `BeebEater_CoolTerm.cts` inside CoolTerm, you’ll have all the settings you need preloaded.
