@@ -31,7 +31,7 @@ No extra modifications are required. All you need to do is load `BeebEater.rom` 
 ## Supported features
  * **Serial Terminal IO** - Interact with BBC BASIC via the serial terminal. 
  * **Keyboard** - Support for a PS/2 Keyboard connected to PORTA on the VIA.
- * **Keyboard** - Support for a 16x2 LCD connected to PORTB on the VIA (4-bit mode).
+ * **LCD** - Support for a 16x2 LCD connected to PORTB on the VIA (4-bit mode).
  * **Backspace/Delete** on current input.
  * **Escape key** for leaving those happy little mistakes.
  * (CoolTerm Only) **Clear the serial terminal screen** using `CLS`.
