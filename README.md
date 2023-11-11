@@ -55,7 +55,7 @@ BeebEater assumes you have the [standard Ben Eater 6502 build](https://eater.net
 
 ![Ben Eater 6502 Schematic Diagram](https://eater.net/schematics/6502-serial.png)
 
-### Required Hardware Adjustments
+### Required Additional Hardware Adjustments
 
 BeebEater follows the same schematic as the Ben Eater one shown above, but with two minor additions: 
  1. Connect the PS/2 keyboard to the PA0-PA7 pins (Pins 2-9) on the VIA, as per [Ben's keyboard video.](https://www.youtube.com/watch?v=w1SB9Ry8_Jg)
