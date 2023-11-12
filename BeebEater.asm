@@ -358,7 +358,7 @@ printMessageLoop:
 ; It also checks if the escape key has been pressed. If it has, it lets the caller know so it needs to leave whatever it's running.
 OSRDCHV:
     ; First, check for escape flag
-;    LDA #0 ; Reset A just to be safe
+    ; LDA #0 ; Reset A just to be safe
     BIT OSESC ; if the escape flag set?
     BMI escapeCondition ; Skip reading and jump to escape handling.
 
@@ -403,6 +403,7 @@ WAIT_LOOP:
     PLX ; 4 cycles. Called only once.
 OSWRCHV_RETURN: ; make sure this is still included if have commented WAIT_SETUP and WAIT_LOOP out
     PLP ; Restore caller's interupt state
+    CLI ; Enable interrupts again
     RTS ; 6 cycles
 
 ; OSBYTE: 'OS Byte'
@@ -574,7 +575,7 @@ readTimerLoop:
     RTS
 
 ; OSWORD 2: Write System Timer
-; To write the timer, let's essentially do the opposeite of 'Read System Timer'
+; To write the timer, let's essentially do the opposite of 'Read System Timer'
 ; Let's loop through the 5 bytes in control block, and store them in the 5-byte variable starting at address 'TICKS'.
 OSWORD2V:
     LDX #0
@@ -983,7 +984,7 @@ irq_acia:
     BNE end_irq ; If it's not an escape key, we've done everything we need. Skip to the end.
 irq_escape: ; If an escape key was pressed, let's set the escape flag.
     LDA #$FF
-    STA $FF ; set the 'escape flag' address at $FF to the value #$FF.
+    STA OSESC ; set the 'escape flag'.
     JMP end_irq ; Skip to the end.
 irq_keyboard: ; If we've ruled out the ACIA, then let's try the keyboard.
     LDA IFR ; Check the "Interrupt Flag Register" to make sure it was the keyboard that caused the interrupt.
