@@ -491,8 +491,8 @@ osword0setup:
     LDA ($F0),Y ; Get value (high byte) from zero-page. Y is 1 right now.
     STA $E9 ; Store into temporary buffer (high byte)
 
-;    LDY #$00
-;    STY $0269 ; [store 0 in 'paged mode counter'?]
+    LDY #$00
+    STY $0269 ; [store 0 in 'paged mode counter'? This needs be here, otherwise we get 'Syntax Error' for everything]
 
     LDA ($F0),Y ; Get value (low byte) from zero-page
     STA $E8 ; Store into temporary buffer (low byte)
@@ -524,11 +524,11 @@ delete:
     DEY ; Otherwise, go back 1
     BCS outputAndReadAgain ; Write the delete character. Go back to the start.
 checkLowercase: 
-;    CMP #$61        ; Compare with 'a'
-;    BCC notLower    ; If less than 'a', it's not a lowercase letter
-;    CMP #$7B        ; Compare with 'z'
-;    BCS notLower    ; If greater than 'z', it's not a lowercase letter
-;    AND #$DF        ; Clear the 5th bit to convert to uppercase
+    CMP #$61        ; Compare with 'a'
+    BCC notLower    ; If less than 'a', it's not a lowercase letter
+    CMP #$7B        ; Compare with 'z'
+    BCS notLower    ; If greater than 'z', it's not a lowercase letter
+    AND #$DF        ; Clear the 5th bit to convert to uppercase
 notLower:
     STA ($E8),Y ; store character into the buffer
     CMP #$0D ; is it the newline character?
@@ -826,12 +826,12 @@ print_char:
     CMP #$0D ; is it a carriage return?
     BEQ lcd_print_enter  ; Go to the enter handler.
 
-;    ; Check that the value is in ASCII range before attempting to print it.
-; This is part of OSWORD0 not OSWRCH
-;    CMP $02B4 ; check minimum ASCII character
-;    BCC print_char_exit
-;    CMP $02B5 ; check maximum ASCII character
-;    BCS print_char_exit ; If it's not in the range, let's leave early.
+    ; Check that the value is in ASCII range before attempting to print it.
+        ; NOTE: This is just for the LCD. Not for the serial terminal.
+    CMP $02B4 ; check minimum ASCII character
+    BCC print_char_exit
+    CMP $02B5 ; check maximum ASCII character
+    BCS print_char_exit ; If it's not in the range, let's leave early.
 
     JMP print_ascii ; Otherwise, let's print it.
     
