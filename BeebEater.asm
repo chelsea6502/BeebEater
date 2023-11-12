@@ -74,6 +74,7 @@ RW = %00100000
 RS = %00010000
 
 ; BBC MOS "OS Calls". Code calls these addresses when it wants to use your hardware for something.
+OSRDCH = $FFE0 ; "OS Read Character" - Transfers the characters read from the 6551 ACIA into Register A (Accumulator)
 OSASCI = $FFE3 ; "OS ASCII" - Print an ASCII character stored in Register A (Accumulator)
 OSNEWL = $FFE7 ; "OS New Line" - Print the 'CR' ASCII character, followed by the 'LF' character. These two characters make up a new line.
 OSWRCH = $FFEE ; "OS Write Character" - Print a byte stored in the Accumulator. This doesn't necessarily have to be an ASCII one.
@@ -127,10 +128,10 @@ reset:
     ; In case we did a 'soft' reset where memory is preserved, let's wipe the previous state and start again.
 
     ; Reset the processor status
-;    LDA #0
-;    PHA ; Push A onto the stack
-;    PLP ; PLP = "Pull status from stack". This essentially resets the status flags to 0.
-; *BUG* That also enbles IRQs!
+    LDA #0
+    PHA ; Push A onto the stack
+    PLP ; PLP = "Pull status from stack". This essentially resets the status flags to 0.
+    SEI ; Disable interrupts by setting the Interrupt status flag on the 6502.
 
     ; Wipe all the RAM
     LDA #0
@@ -230,14 +231,12 @@ wipe_zeropage_loop:
     ; Routine to wait at least 4.1ms (= 4100 clock cycles at 1mhz)
     LDX #4
 wait_4ms_outer_loop:
-    LDY #203
+    LDY #$FF
 wait_4ms_inner_loop:
     DEY  
     BNE wait_4ms_inner_loop 
     DEX   
     BNE wait_4ms_outer_loop  
-    NOP  ; Extra NOPs just to be sure
-    NOP
 
     ; Step 3: Send another '00000011' (Hex $03), then wait at least 100 microseconds (0.1ms)
 
@@ -248,8 +247,11 @@ wait_4ms_inner_loop:
     AND #%00001111
     STA PORTB
 
-    ; Reuse the ACIA transmit wait routine to wait at least 100 microseconds (= 100 clock cycles at 1mhz)
-    JSR WAIT_SETUP
+    ; Routine to wait at least 0.1ms (= 100 clock cycles at 1mhz)
+    LDY #$FF
+wait_100us_loop:
+    DEY
+    BNE wait_100us_loop
 
     ; Step 4: Send a third and final '00000011' (Hex $03).
     ; No need to wait a certain amount of time like before, because the LCD's 'busy' flag can be checked after this.
