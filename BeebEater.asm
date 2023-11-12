@@ -28,15 +28,14 @@ OSKBD2 =OSKBD1+1
 OSKBD3 =OSKBD1+2
 OSAREG =$EF
 OSXREG =$F0
-OXYREG =$F1
+OSYREG =$F1
 OSCTRL =OSXREG
 OSLPTR =$F2
 OSINTA =$FC
 OSFAULT=$FD
 OSESC  =$FF
 OSVDUWS=$0300
-;
-;
+
 READBUFFER      = OSKBD1  ; this stores the latest ASCII character that was sent into the ACIA
 KEYBOARD_FLAGS  = OSKBD2  ; This byte helps us keep track of the state of a key presses on the keyboard. See below.
 LCDREADBUFFER   = OSVDU+2 ; For storing the last printed ASCII character in the LCD.
@@ -164,11 +163,12 @@ wipe_zeropage_loop:
 ;    LDX #0
 ;    LDY #0
 ;
-;    ; Set the minimum and maximum ASCII ranges for printing to the LCD or serial.
-;    LDA #$20 ; Minimum is $20, starting with the space character
-;    STA $02B4
-;    LDA #$FF ; Maximum ASCII is $7F, but we can use $FF too.
-;    STA $02B5
+    ; Set the minimum and maximum ASCII ranges for printing to the LCD or serial.
+    ; We need to initalise this early so the '>' prompt shows on the LCD on boot.
+    LDA #$20 ; Minimum is $20, starting with the space character
+    STA $02B4
+    LDA #$FF ; Maximum ASCII is $7F, but we can use $FF too.
+    STA $02B5
 
     ; -- ACIA 6551 Initialisation --
 
@@ -457,9 +457,9 @@ OSWORDV:
 	SEI	 ; Disable interrupts for now, so we don't change a character mid-print.
 	
     ; Store A, X, and Y registers in MOS API workspace.
-	STA	$EF	
-	STX	$F0				
-	STY	$F1				
+	STA	OSAREG
+	STX	OSXREG			
+	STY	OSYREG				
 
     CMP #$00        ; Is it the 'Read Line' system call?
     BEQ OSWORD0V    ; If yes, start reading input from the user.
@@ -481,20 +481,20 @@ OSWORD0V:
     LDY #4 ; Load 
 osword0setup:
     ; Store max/min ASCII codes, and max line length from zero page memory to main memory
-    LDA ($F0),Y
+    LDA (OSXREG),Y
     STA $02B3-2,Y ; TODO: Remember and explain why we need to subtract 2.
     DEY
     CPY #2 ; loop until it's 1
     BCS osword0setup
 
     ; store input buffer addresses into memory (temporary buffer)
-    LDA ($F0),Y ; Get value (high byte) from zero-page. Y is 1 right now.
+    LDA (OSXREG),Y ; Get value (high byte) from zero-page. Y is 1 right now.
     STA $E9 ; Store into temporary buffer (high byte)
 
     LDY #$00
     STY $0269 ; [store 0 in 'paged mode counter'? This needs be here, otherwise we get 'Syntax Error' for everything]
 
-    LDA ($F0),Y ; Get value (low byte) from zero-page
+    LDA (OSXREG),Y ; Get value (low byte) from zero-page
     STA $E8 ; Store into temporary buffer (low byte)
 
     CLI ; Explicitly enable interrupts to allow background keypress processing
@@ -566,7 +566,7 @@ readTimer:
     LDY #4 ; Use this to read the 5 bytes. This will run down from 4 to 0.
 readTimerLoop:
     LDA TICKS,X ; Load the TICKS byte, offset by X. X will be either 0, 1, 2, 3, or 4.
-    STA ($F0),Y ; Store into control block offset by Y. Y will be either 4, 3, 2, 1, or 0.               
+    STA (OSXREG),Y ; Store into control block offset by Y. Y will be either 4, 3, 2, 1, or 0.               
     INX                                                
     DEY                 
     BPL readTimerLoop ; Loop while Y is still greater than 0. BPL = "Branch on PLus"
@@ -580,7 +580,7 @@ OSWORD2V:
     LDX #0
     LDY #4
 writeTimerLoop:
-    LDA ($F0),Y ; Same principle as 'readTimerLoop'.
+    LDA (OSXREG),Y ; Same principle as 'readTimerLoop'.
     STA TICKS, X
     INX
     DEY
@@ -965,7 +965,7 @@ exit_lcd:
 
 ; Subroutine called after every NMI or IRQ in hardware, or the BRK instruction in software.
 interrupt:
-    STA $FC ; Save A for later.
+    STA OSINTA ; Save A for later.
     CLD ; Ensure we are operating in binary.                    
     PLA ; get status register. it's on the stack at this point
     PHA ; put the status flags back on the stack
@@ -1003,7 +1003,7 @@ irq_via_tick: ; If we've ruled out the ACIA, then let's assume it was the VIA ti
     BNE end_irq
     INC TICKS
 end_irq:
-    LDA $FC ; Restore what was in the A register before we were so rudely interrupted
+    LDA OSINTA ; Restore what was in the A register before we were so rudely interrupted
     RTI ; "ReTurn from Interrupt" Restore caller's flags, return to caller.
 
 
@@ -1019,12 +1019,12 @@ BRKV:
     LDA $0100 + 3,X ; Get the low byte of the error message. This is stored in the stack.
     SEC             ; Set the carry bit in the 6502 status register.
     SBC #1          ; Subtract 1. SBC = "SuBtract if Carry set". This will always subtract 1 because we just set it. Need to subtract one as BRK stacks address of BRK+2 rather than the BRK+1 that we need.
-    STA $FD         ; Store it into $FD
+    STA OSFAULT         ; Store it into $FD
     
     LDA $0100 + 4,X ; Get the high byte of the error message. This is stored in the stack.
     SBC #0          ; Subtract 1 if the carry bit is set.
     STA $FE         ; Store high byte into $FE
-    STX $F0         ; Store the stack pointer in $F0.
+    STX OSXREG         ; Store the stack pointer in OSXREG.
 
     PLA             ; Restore the original value of X
     TAX                 
