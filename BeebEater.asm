@@ -91,9 +91,6 @@ IRQ = $FFFE ; Maskable interupts
     incbin "Basic4r32.rom"  ; Import the binary file for BBC BASIC version 4r32. 
                                 ; Sourced from: https://mdfs.net/Software/BBCBasic/6502/
                                 ; Download the one from the "Acorn BBC Master" section.
-    ; incbin "Basic2.rom" ; Running an old-school 6502 instead of the WDC 65C02? You'll have to use BBC BASIC II instead.
-                                ; Sourced from: https://mdfs.net/Software/BBCBasic/6502/
-                                ; Download the one from the "Acorn BBC Microcomputer" section.
 
     .org START ; set the start of BeebEater at $C000.
 
@@ -120,87 +117,43 @@ bootMessageRAM: ; The second part of the first line.
 ; Set up BeebEater. The reset addresses of $FFFC and $FFFD point to here.
 ; Let's set any hardware-specific things here.
 reset:
-    SEI ; Disable interrupts
-    CLD ; Ensure in binary
-    ; -- Wipe Memory --
-
-    ; In case we did a 'soft' reset where memory is preserved, let's wipe the previous state and start again.
-
-    ; Reset the processor status
-    LDA #0
-    PHA ; Push A onto the stack
-    PLP ; PLP = "Pull status from stack". This essentially resets the status flags to 0.
-    SEI ; Disable interrupts by setting the Interrupt status flag on the 6502.
-
-    ; Wipe all the RAM
-    LDA #0
-    LDX #$3F
-    LDY #$00
-    STA $00
-wipe_outer:
-    STX $01
-wipe_inner:
-    DEY             ; Decrement counter
-    STA ($00),Y   ; Clear memory at address. High byte in address $01, low byte in Y register.
-    CPY #0
-    BNE wipe_inner ; Y is not zero? continue checking.
-wipe_outer_tail:
-    DEX
-    CPX #$00
-    BNE wipe_outer ; X is not zero? Continue outer loop.
-
-wipe_zeropage:
-    LDY #0
-    STY $01
-    STY $00
-wipe_zeropage_loop:
-    DEY             ; Decrement counter
-    STA ($00),Y   ; Clear memory at address. High byte in address $01, low byte in Y register.
-    CPY #0
-    BNE wipe_zeropage_loop ; Y is not zero? continue checking.
-
-;    ; Reset registers just to be safe
-;    LDX #0
-;    LDY #0
-;
-    ; Set the minimum and maximum ASCII ranges for printing to the LCD or serial.
-    ; We need to initalise this early so the '>' prompt shows on the LCD on boot.
-    LDA #$20 ; Minimum is $20, starting with the space character
-    STA $02B4
-    LDA #$FF ; Maximum ASCII is $7F, but we can use $FF too.
-    STA $02B5
-
     ; -- ACIA 6551 Initialisation --
 
-    LDA #$00 ; Set PORTA to input
-    STA DDRA
-
-    LDA #$00 ; Soft reset the 6551 ACIA by writing 0 to the status register.
-    STA ACIA_STATUS
+    ; Soft reset the 6551 ACIA by writing 0 to the status register.
+    LDA #0
+    STA ACIA_STATUS 
 
     ; Intialise ACIA the command register
-    LDA #$09 ; No parity, no echo, with interrupts after every time we recieve a byte.
+    LDA #%00001001 ; No parity, no echo, with interrupts after every time we recieve a byte.
     STA ACIA_CMD
 
     ; Initialise the ACIA control register
-    LDA #$10 ; 1 stop bit, 8 bits, 16x baud. ('16x' means 115200 on a 1.8432Mhz clock)
+    LDA #%00010000 ; 1 stop bit, 8 bits, 16x baud. ('16x' means 115200 on a 1.8432Mhz clock)
     STA ACIA_CTRL
 
+    ; --- VIA 6522 Initialisation ---
+
+    LDA #0 ; Set PORTA (for the keyboard) to input.
+    STA DDRA
+    LDA #%11111111 ; Set PORTB (for the LCD) to output.
+    STA DDRB
+
     ; Initialise the 'Auxiliary Control Register (ACR)'.
-    ; Set the VIA timer to trigger an interrupt every 10 milliseconds (1 centisecond)
+    ; Set the VIA timer to trigger an interrupt every 0.1 milliseconds (1 centisecond)
     LDA #%01000000 ; Set the VIA to send continuous interrupts, spaced apart by every time Timer 1 runs out.
     STA ACR
+
     ; Store the hex equivalent of '10,000 - 2' into the timer. 
     ; We subtract 2 because it takes two clock cycles to send an interrupt and reset the timer.
-    ; At 1mhz clock, the VIA ticks every 0.001 milliseconds. 0.0001 x 10000 = 10 milliseconds.
+    ; At 1mhz clock, the VIA ticks every 0.001 milliseconds. 0.001 x 10000 = 1 millisecond.
     LDA #$0E 
     STA T1CL
     LDA #$27
     STA T1CH
 
     ; Set two interrupt triggers on the VIA:
-    ; 1. When the timer goes to 0
-    ; 2. When the 'CA1' pin has a rising edge (for the PS/2 Keyboard)
+    ; 1. When the timer goes to 0.
+    ; 2. When the 'CA1' pin has a rising edge (for the PS/2 Keyboard).
     LDA #$01
     STA PCR
     LDA #$C2
@@ -210,17 +163,14 @@ wipe_zeropage_loop:
     LDA #%11000000 ; Trigger an IRQ interrupt every time Timer 1 runs out.
     STA IER
 
-        ; --- LCD Reset Sequence ---
-    LDA #%11111111
-    STA DDRB
+    ; --- LCD Reset Sequence ---
 
     ; We will now go through the LCD reset sequence, as instructed in page 47 of the Hitachi 44780U LCD controller datasheet.
-    ; This ensures the LCD goes to the same state no matter where it was before the reset.
 
-    ; Step 1: Wait 15ms after LCD gets power. Let's assume the reset_wipe_ram_loop took care of that aleady.
+    ; Step 1: Wait 15ms after LCD gets power.
+    JSR lcd_init_delay ; This routine waits about 16 milliseconds when at a 1mhz clock.
     
-    ; Step 2: Send '00000011' (Hex $03), then wait at least 4.1 milliseconds
-
+    ; Step 2: Send '00000011'
     LDA #%00000011
     STA PORTB
     ORA #E ; Flip the 'enable' bit and send the same 4 lower bits to the LCD. This is how we send an instruction to the LCD.
@@ -228,18 +178,10 @@ wipe_zeropage_loop:
     AND #%00001111
     STA PORTB ; Clear the 'enable' bit and send the same 4 lower bits to the LCD.
 
-    ; Routine to wait at least 4.1ms (= 4100 clock cycles at 1mhz)
-    LDX #4
-wait_4ms_outer_loop:
-    LDY #$FF
-wait_4ms_inner_loop:
-    DEY  
-    BNE wait_4ms_inner_loop 
-    DEX   
-    BNE wait_4ms_outer_loop  
+    ; Wait at least 4.1 milliseconds
+    JSR lcd_init_delay
 
-    ; Step 3: Send another '00000011' (Hex $03), then wait at least 100 microseconds (0.1ms)
-
+    ; Step 3: Send another '00000011'
     LDA #%00000011
     STA PORTB
     ORA #E
@@ -247,47 +189,37 @@ wait_4ms_inner_loop:
     AND #%00001111
     STA PORTB
 
-    ; Routine to wait at least 0.1ms (= 100 clock cycles at 1mhz)
-    LDY #$FF
-wait_100us_loop:
-    DEY
-    BNE wait_100us_loop
+    ; Wait at least 100 microseconds (0.1ms)
+    JSR lcd_init_delay
 
-    ; Step 4: Send a third and final '00000011' (Hex $03).
+    ; Step 4: Send a third and final '00000011'
     ; No need to wait a certain amount of time like before, because the LCD's 'busy' flag can be checked after this.
 
     LDA #%00000011
     JSR lcd_instruction
 
-    ; At this point we have completed the LCD reset sequence.
-
-    ; --- LCD Initialisation ---
-
     ; The LCD has two modes: '8-bit mode', and '4-bit mode'. 
     ; Let's use 4-bit mode, because otherwise we would have to use PORTA, and that is reserved for the PS/2 keyboard.
-
     LDA #%00000010 ; Send the instruction to set 4-bit mode. 
     JSR lcd_instruction
+
+    ; --- LCD Initialisation ---
     
-    ; Let's now send a series of options that will set it to configuration we want.
-    ; By default, we want a 2 line display, a blinking cursor, and set to position 40: the start of the second line.
+    ; Let's now send a series of options that will set it to the configuration we want.
     ; For more details of the options, see page 24 of the Hitachi HD44780U datasheet.
     LDA #%00101000 ; Function set: 2-line display; 5x8 font
     JSR lcd_instruction
-    LDA #%00001111 ; Display on/off control: display on, cursor on, cursor blinking
+    LDA #%00001111 ; Display on/off control: display on, cursor on, cursor blinking.
     JSR lcd_instruction
-    LDA #%00000110 ; Entry mode set: Increment, display shift
+    LDA #%00000110 ; Entry mode set: Increment, display shift.
     JSR lcd_instruction
-    LDA #%00000001 ; Clear the display
+    LDA #%00000001 ; Clear the display.
     JSR lcd_instruction
-    LDA #%11000000 ; put cursor at position 40
+    LDA #%11000000 ; put cursor at position 40.
     JSR lcd_instruction
 
     ; fall through to 'boot' label
 boot:
-
-    ; --- VIA 6522 Initialisation ---
-
     ; Reset the part in memory that stores the time elapsed (in 'centiseconds') since boot.
     LDA #$00
     STA TICKS
@@ -296,18 +228,17 @@ boot:
     STA TICKS + 3
     STA TICKS + 4
 
-    ; BBC MOS stores the address of the 'write character' routine at $020E for redirection.
-    ; BBC BASIC bypasses the API and calls the vector directly.
-    LDA #>OSWRCHV ; Get the high byte of destination
+    ; To print characters, BBC BASIC uses the address stored in $020F-$020E. We need to load those addresses with our OSWRCH routine.
+    LDA #>OSWRCHV ; Get the high byte of the write character routine.
     STA $020F ; Store it in $020F.
-    LDA #<OSWRCHV ; Get the low byte of the destination
+    LDA #<OSWRCHV ; Get the low byte of the write character routine.
     STA $020E ; Store it in $020E
 
     ; Send a "Form Feed" ASCII character. This clears the screen.
     LDA #$0C
     JSR OSWRCH
 
-    ; Let's print the boot message!
+    ; Let's print the boot message.
     LDY #<bootMessage ; Start at start of messages
     LDA #>bootMessage ; Get the start address of where the first line of the boot message is.
     JSR printMessage ; Display the boot message.
@@ -318,37 +249,22 @@ boot:
     JSR OSNEWL
     JSR OSNEWL
 
-    ; Get the 'ROM Title' that is stored at address $8009.
-    ; [TODO: Remember and explain why we need to subtract 1 from $8009]
-    LDA #>($8009 - 1) ; High byte of '$8009 - 1' contains the address of first character of the string. Let's store that in A.
-    LDY #<($8009 - 1) ; Low byte of '$8009 - 1' contains the address containing length of the string. Let's store that in Y.
-    JSR printMessage ; Display the ROM title.
+    ; Print the ROM title ("BASIC" by default).
+    ; The higher four bits contain the location of the ROM Title
+    ; The lower four bits of $8008 contains the length of the string.
+    ; These two things are exactly what we need for the 'printMessage' routine.
+    LDA #>($8008) ; Store the location of the string into A.
+    LDY #<($8008) ; Store the length of the string into Y.
+    JSR printMessage
 
     ; Print two line breaks to have a one line gap from the command prompt (The '>')
     JSR OSNEWL
     JSR OSNEWL
 
+    CLC ; Clear the carry bit to tell the BBC BASIC we are entering from RESET.
+    LDA #$01 ; Load '1' into the accumulator to tell BBC BASIC we are starting up.
     CLI ; Enable interrupts, now that we're done initialising all our memory and peripherals.
-
-    CLC ; CC to tell the language we are entering from RESET.
-    LDA #$01 ; Load '1' into the accumulator to tell the language we are starting up.
-    JMP BASIC ; Enter the magical world of BBC BASIC
-
-; Subroutine to print a string. Right now this is only used for the boot message.
-; printMessage will start reading at the address stored in A, plus the raw value stored in Y.
-; e.g. if A is "09" and Y is "4", printMessage will read the ASCII character stored at $8009 + 4 bytes (which is $800C).
-printMessage:
-    STA $FE ; Store the high byte of the source address.
-    LDA #00 ; Load 0 into A
-    STA $FD ; Use $00 as the low byte of the address, using offset from Y for source.
-printMessageLoop:
-    INY ; Step to next character. On first pass will step to first char.
-    LDA ($FD),Y ; Read the character at $FD, offset by the value of Y.
-    JSR OSASCI ; Send the character to the ACIA to transmit out of the 'Tx' pin.
-    CMP #$00 ; A '0' lets BBC Basic know when to stop reading. Let's check if that's the case.
-    BNE printMessageLoop ;  If A is not 0, read the next character.
-    RTS ; Return to where we were before 'printMessage' was called.
-
+    JMP BASIC ; Enter BBC BASIC!
 
 ; -- OS Call Routines --
 
@@ -358,7 +274,6 @@ printMessageLoop:
 ; It also checks if the escape key has been pressed. If it has, it lets the caller know so it needs to leave whatever it's running.
 OSRDCHV:
     ; First, check for escape flag
-    ; LDA #0 ; Reset A just to be safe
     BIT OSESC ; if the escape flag set?
     BMI escapeCondition ; Skip reading and jump to escape handling.
 
@@ -679,7 +594,6 @@ keyboard_interrupt_exit:
 
 ; -- LCD Routines --
 
-
 ; High-level overview on how to send an instruction to the LCD in 4-bit mode:
 ; 1. Send the high 4 data bits of the instruction to PORTB.
 ;    'RS' and 'RW' will be depending on the type of instruction. Most of them have RS and RW set to 0.
@@ -827,12 +741,8 @@ print_char:
     CMP #$0D ; is it a carriage return?
     BEQ lcd_print_enter  ; Go to the enter handler.
 
-    ; Check that the value is in ASCII range before attempting to print it.
-        ; NOTE: This is just for the LCD. Not for the serial terminal.
-    CMP $02B4 ; check minimum ASCII character
+    CMP #$20 ; Check minimum ASCII character ($20 = Space character)
     BCC print_char_exit
-    CMP $02B5 ; check maximum ASCII character
-    BCS print_char_exit ; If it's not in the range, let's leave early.
 
     JMP print_ascii ; Otherwise, let's print it.
     
@@ -961,6 +871,33 @@ exit_lcd:
     CLC ; CLC = "CLear Carry"
     RTS ; Return to where we were before.
 
+
+lcd_init_delay:
+    LDX #$0F        ; Load X register with the high byte of 4000 (4000 in hexadecimal is 0x0FA0)
+    LDY #$A0        ; Load Y register with the low byte of 4000
+lcd_init_delay_loop:
+    DEY             ; Decrement Y
+    BNE lcd_init_delay_loop  ; Branch if not zero (Y != 0) to delay_loop
+    DEX             ; Decrement X
+    BNE lcd_init_delay_loop  ; Branch if not zero (X != 0) to delay_loop
+    RTS
+
+; -- Miscellaneous Subroutines --
+
+; Subroutine to print a string. Right now this is only used for the boot message.
+; printMessage will start reading at the address stored in A, plus the raw value stored in Y.
+; e.g. if A is "08" and Y is "4", printMessage will read the ASCII character stored at $8008 + 4 bytes (which is $800C).
+printMessage:
+    STA $FE ; Store the high byte of the source address.
+    LDA #0 ; Load 0 into A
+    STA $FD ; Use $00 as the low byte of the address, using offset from Y for source.
+printMessageLoop:
+    INY ; Step to next character. On first pass will step to first char.
+    LDA ($FD),Y ; Read the character at $FD, offset by the value of Y.
+    JSR OSASCI ; Send the character to the ACIA to transmit out of the 'Tx' pin.
+    CMP #$0 ; A '0' lets BBC Basic know when to stop reading. Let's check if that's the case.
+    BNE printMessageLoop ;  If A is not 0, read the next character.
+    RTS ; Return to where we were before 'printMessage' was called.
 
 ; -- Interrupt Handling --
 
