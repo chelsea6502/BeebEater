@@ -120,8 +120,6 @@ bootMessageRAM: ; The second part of the first line.
 ; Set up BeebEater. The reset addresses of $FFFC and $FFFD point to here.
 ; Let's set any hardware-specific things here.
 reset:
-    SEI ; Disable interrupts
-    CLD ; Ensure in binary
     ; -- Wipe Memory --
 
     ; In case we did a 'soft' reset where memory is preserved, let's wipe the previous state and start again.
@@ -130,34 +128,7 @@ reset:
     LDA #0
     PHA ; Push A onto the stack
     PLP ; PLP = "Pull status from stack". This essentially resets the status flags to 0.
-    SEI ; Disable interrupts by setting the Interrupt status flag on the 6502.
-
-    ; Wipe all the RAM
-    LDA #0
-    LDX #$3F
-    LDY #$00
-    STA $00
-wipe_outer:
-    STX $01
-wipe_inner:
-    DEY             ; Decrement counter
-    STA ($00),Y   ; Clear memory at address. High byte in address $01, low byte in Y register.
-    CPY #0
-    BNE wipe_inner ; Y is not zero? continue checking.
-wipe_outer_tail:
-    DEX
-    CPX #$00
-    BNE wipe_outer ; X is not zero? Continue outer loop.
-
-wipe_zeropage:
-    LDY #0
-    STY $01
-    STY $00
-wipe_zeropage_loop:
-    DEY             ; Decrement counter
-    STA ($00),Y   ; Clear memory at address. High byte in address $01, low byte in Y register.
-    CPY #0
-    BNE wipe_zeropage_loop ; Y is not zero? continue checking.
+    SEI ; However, we need interrupts disabled for now. Disable interrupts by setting the interrupt disable status flag on the 6502.
 
 ;    ; Reset registers just to be safe
 ;    LDX #0
