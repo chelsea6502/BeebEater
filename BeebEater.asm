@@ -120,26 +120,16 @@ bootMessageRAM: ; The second part of the first line.
 ; Set up BeebEater. The reset addresses of $FFFC and $FFFD point to here.
 ; Let's set any hardware-specific things here.
 reset:
-    ; -- Wipe Memory --
+    ; -- Wipe Processor --
 
-    ; In case we did a 'soft' reset where memory is preserved, let's wipe the previous state and start again.
-
-    ; Reset the processor status
+    ; Reset the 6502 state. 
+    ; Status flags and registers keep their state from before the reset, so let's re-initialise them.
     LDA #0
+    TAX ; Transfer A to X
+    TAY ; Tranfer A to Y
     PHA ; Push A onto the stack
     PLP ; PLP = "Pull status from stack". This essentially resets the status flags to 0.
-    SEI ; However, we need interrupts disabled for now. Disable interrupts by setting the interrupt disable status flag on the 6502.
-
-;    ; Reset registers just to be safe
-;    LDX #0
-;    LDY #0
-;
-    ; Set the minimum and maximum ASCII ranges for printing to the LCD or serial.
-    ; We need to initalise this early so the '>' prompt shows on the LCD on boot.
-    LDA #$20 ; Minimum is $20, starting with the space character
-    STA $02B4
-    LDA #$FF ; Maximum ASCII is $7F, but we can use $FF too.
-    STA $02B5
+    SEI ; However, we need interrupts disabled for now. Disable interrupts by setting the interrupt disable status flag on the 6502.s
 
     ; -- ACIA 6551 Initialisation --
 
@@ -798,12 +788,8 @@ print_char:
     CMP #$0D ; is it a carriage return?
     BEQ lcd_print_enter  ; Go to the enter handler.
 
-    ; Check that the value is in ASCII range before attempting to print it.
-        ; NOTE: This is just for the LCD. Not for the serial terminal.
-    CMP $02B4 ; check minimum ASCII character
+    CMP #$20 ; Check minimum ASCII character ($20 = Space character)
     BCC print_char_exit
-    CMP $02B5 ; check maximum ASCII character
-    BCS print_char_exit ; If it's not in the range, let's leave early.
 
     JMP print_ascii ; Otherwise, let's print it.
     
