@@ -120,24 +120,11 @@ bootMessageRAM: ; The second part of the first line.
 ; Set up BeebEater. The reset addresses of $FFFC and $FFFD point to here.
 ; Let's set any hardware-specific things here.
 reset:
-    ; -- Wipe Processor --
-
-    ; Reset the 6502 state. 
-    ; Status flags and registers keep their state from before the reset, so let's re-initialise them.
-    LDA #0
-    TAX ; Transfer A to X
-    TAY ; Tranfer A to Y
-    PHA ; Push A onto the stack
-    PLP ; PLP = "Pull status from stack". This essentially resets the status flags to 0.
-    SEI ; However, we need interrupts disabled for now. Disable interrupts by setting the interrupt disable status flag on the 6502.s
-
     ; -- ACIA 6551 Initialisation --
 
     LDA #$00 ; Set PORTA to input
     STA DDRA
-
-    LDA #$00 ; Soft reset the 6551 ACIA by writing 0 to the status register.
-    STA ACIA_STATUS
+    STA ACIA_STATUS ; Soft reset the 6551 ACIA by writing 0 to the status register.
 
     ; Intialise ACIA the command register
     LDA #$09 ; No parity, no echo, with interrupts after every time we recieve a byte.
