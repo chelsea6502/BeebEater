@@ -91,9 +91,6 @@ IRQ = $FFFE ; Maskable interupts
     incbin "Basic4r32.rom"  ; Import the binary file for BBC BASIC version 4r32. 
                                 ; Sourced from: https://mdfs.net/Software/BBCBasic/6502/
                                 ; Download the one from the "Acorn BBC Master" section.
-    ; incbin "Basic2.rom" ; Running an old-school 6502 instead of the WDC 65C02? You'll have to use BBC BASIC II instead.
-                                ; Sourced from: https://mdfs.net/Software/BBCBasic/6502/
-                                ; Download the one from the "Acorn BBC Microcomputer" section.
 
     .org START ; set the start of BeebEater at $C000.
 
