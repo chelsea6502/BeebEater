@@ -274,7 +274,6 @@ boot:
 ; It also checks if the escape key has been pressed. If it has, it lets the caller know so it needs to leave whatever it's running.
 OSRDCHV:
     ; First, check for escape flag
-    ; LDA #0 ; Reset A just to be safe
     BIT OSESC ; if the escape flag set?
     BMI escapeCondition ; Skip reading and jump to escape handling.
 
