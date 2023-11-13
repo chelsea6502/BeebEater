@@ -162,7 +162,8 @@ reset:
     ; We will now go through the LCD reset sequence, as instructed in page 47 of the Hitachi 44780U LCD controller datasheet.
     ; This ensures the LCD goes to the same state no matter where it was before the reset.
 
-    ; Step 1: Wait 15ms after LCD gets power. Let's assume the reset_wipe_ram_loop took care of that aleady.
+    ; Step 1: Wait 15ms after LCD gets power.
+    JSR lcd_init_delay ; This routine waits about 16 milliseconds when at a 1mhz clock
     
     ; Step 2: Send '00000011' (Hex $03), then wait at least 4.1 milliseconds
 
@@ -173,17 +174,10 @@ reset:
     AND #%00001111
     STA PORTB ; Clear the 'enable' bit and send the same 4 lower bits to the LCD.
 
-    ; Routine to wait at least 4.1ms (= 4100 clock cycles at 1mhz)
-    LDX #4
-wait_4ms_outer_loop:
-    LDY #$FF
-wait_4ms_inner_loop:
-    DEY  
-    BNE wait_4ms_inner_loop 
-    DEX   
-    BNE wait_4ms_outer_loop  
+    ; Wait at least 4.1 milliseconds
+    JSR lcd_init_delay
 
-    ; Step 3: Send another '00000011' (Hex $03), then wait at least 100 microseconds (0.1ms)
+    ; Step 3: Send another '00000011' (Hex $03)
 
     LDA #%00000011
     STA PORTB
@@ -192,11 +186,8 @@ wait_4ms_inner_loop:
     AND #%00001111
     STA PORTB
 
-    ; Routine to wait at least 0.1ms (= 100 clock cycles at 1mhz)
-    LDY #$FF
-wait_100us_loop:
-    DEY
-    BNE wait_100us_loop
+    ; Wait at least 100 microseconds (0.1ms)
+    JSR lcd_init_delay
 
     ; Step 4: Send a third and final '00000011' (Hex $03).
     ; No need to wait a certain amount of time like before, because the LCD's 'busy' flag can be checked after this.
@@ -902,6 +893,16 @@ exit_lcd:
     CLC ; CLC = "CLear Carry"
     RTS ; Return to where we were before.
 
+
+lcd_init_delay:
+    LDX #$0F        ; Load X register with the high byte of 4000 (4000 in hexadecimal is 0x0FA0)
+    LDY #$A0        ; Load Y register with the low byte of 4000
+lcd_init_delay_loop:
+    DEY             ; Decrement Y
+    BNE lcd_init_delay_loop  ; Branch if not zero (Y != 0) to delay_loop
+    DEX             ; Decrement X
+    BNE lcd_init_delay_loop  ; Branch if not zero (X != 0) to delay_loop
+    RTS
 
 ; -- Interrupt Handling --
 
