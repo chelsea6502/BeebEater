@@ -94,7 +94,7 @@ cd ./symon
 mvn package
 ```
 
-Then, run place BeebEater.rom in the same directory as Symon, then run Symon with the following:
+Then, place BeebEater.rom in the same directory as Symon, then run Symon with the following:
 `java -jar ~/symon/target/symon-1.3.2.jar -rom BeebEater.rom -cpu 65c02 -machine benEater`
 
 # Special Thanks to…
