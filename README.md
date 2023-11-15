@@ -87,15 +87,10 @@ If you want to make modifications to the code, you’ll need to assemble a new R
 
 Don't have the hardware yet? Want to just try it out? You can use the [Symon 6502 Simulator](https://github.com/sethm/symon/tree/master) to try the original 6502 BBC BASIC in software. No hardware needed!
 
-Assuming you have the Java SDK installed, you can install Symon using the following commands in a MacOS/Linux terminal:
-```
-git clone https://github.com/sethm/symon.git
-cd ./symon
-mvn package
-```
+Download Symon 1.4.0 here: https://github.com/sethm/symon/releases/tag/v1.4.0.
 
-Then, place BeebEater.rom in the same directory as Symon, then run Symon with the following:
-`java -jar ./target/symon-1.3.2.jar -rom ./BeebEater.rom -cpu 65c02 -machine benEater`
+Then, place BeebEater.rom in the same folder as Symon, then run Symon with the following:
+`java -jar symon-1.4.0.jar -rom BeebEater.rom -cpu 65c02 -machine benEater`
 
 # Special Thanks to…
  * **Ben Eater** - For inspiring me to get into computer hardware as a hobby!
