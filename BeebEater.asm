@@ -102,14 +102,16 @@ IRQ = $FFFE ; Maskable interupts
 ;;; BASIC
 ;;;
 ;;; >
-bootMessage: ; The first part of the first line.
-    .byte $0D ; $OD is the "Carriage Return" (CR) ASCII character. 
-    .text "BeebEater Computer " ; Describe the computer system.
-    .byte $00 ; All strings must end with an ASCII NUL character.
-
-bootMessageRAM: ; The second part of the first line.
+bootMessage: ; The first line of the boot message.
+    .byte $0C ; Start with a 'form feed' ASCII character. This clears the screen.
+    .text "BeebEater Computer " ; Describes the computer system.
     .text "16K" ; 16k for 16 kilobytes of RAM available. Feel free to change it if you change your RAM capacity.
-    .byte $07 ; $07 is the "Bell" ASCII character. This plays a sound in most serial monitors.
+    .byte $0A ; Give a one-line gap.
+    .byte $0D
+    .text "BASIC"
+    .byte $0A ; Give a one-line gap.
+    .byte $0D
+    .byte $07 ; Send a bell character
     .byte $00 ; End with NUL
 
 ; -- Start of Program --
@@ -164,42 +166,36 @@ reset:
     STA IER
 
     ; --- LCD Reset Sequence ---
-
     ; We will now go through the LCD reset sequence, as instructed in page 47 of the Hitachi 44780U LCD controller datasheet.
 
     ; Step 1: Wait 15ms after LCD gets power.
     JSR lcd_init_delay ; This routine waits about 16 milliseconds when at a 1mhz clock.
     
-    ; Step 2: Send '00000011'
+    ; Step 2: Send the '00000011' instruction to the LCD. 
+    ; We can't use 'lcd_instruction' right now because the LCD 'busy' flag isn't available yet.
     LDA #%00000011
     STA PORTB
-    ORA #E ; Flip the 'enable' bit and send the same 4 lower bits to the LCD. This is how we send an instruction to the LCD.
+    ORA #E ; Send the same thing, but with the 'enable' bit set. This is how we send an instruction to the LCD.
     STA PORTB
-    AND #%00001111
-    STA PORTB ; Clear the 'enable' bit and send the same 4 lower bits to the LCD.
+    EOR #E ; Send the same thing, but with the 'enable' bit cleared.
+    STA PORTB
+    JSR lcd_init_delay  ; Wait at least 4.1 milliseconds
 
-    ; Wait at least 4.1 milliseconds
-    JSR lcd_init_delay
-
-    ; Step 3: Send another '00000011'
+    ; Step 3: Send the same instruction again to the LCD.
     LDA #%00000011
     STA PORTB
-    ORA #E
+    ORA #E ; Set the 'enable' bit
     STA PORTB
-    AND #%00001111
+    EOR #E ; Clear the 'enable' bit
     STA PORTB
-
-    ; Wait at least 100 microseconds (0.1ms)
-    JSR lcd_init_delay
+    JSR lcd_init_delay ; Wait at least 100 microseconds (0.1 milliseconds)
 
     ; Step 4: Send a third and final '00000011'
-    ; No need to wait a certain amount of time like before, because the LCD's 'busy' flag can be checked after this.
-
+    ; At this point, we can now use 'lcd_instruction' to help us send an instruction.
     LDA #%00000011
     JSR lcd_instruction
 
-    ; The LCD has two modes: '8-bit mode', and '4-bit mode'. 
-    ; Let's use 4-bit mode, because otherwise we would have to use PORTA, and that is reserved for the PS/2 keyboard.
+    ; Step 5: Send '00000010' to indicate that we want to use 4-bit mode instead of 8-bit mode.
     LDA #%00000010 ; Send the instruction to set 4-bit mode. 
     JSR lcd_instruction
 
@@ -218,10 +214,8 @@ reset:
     LDA #%11000000 ; put cursor at position 40.
     JSR lcd_instruction
 
-    ; fall through to 'boot' label
-boot:
     ; Reset the part in memory that stores the time elapsed (in 'centiseconds') since boot.
-    LDA #$00
+    LDA #0
     STA TICKS
     STA TICKS + 1
     STA TICKS + 2
@@ -234,37 +228,29 @@ boot:
     LDA #<OSWRCHV ; Get the low byte of the write character routine.
     STA $020E ; Store it in $020E
 
-    ; Send a "Form Feed" ASCII character. This clears the screen.
-    LDA #$0C
-    JSR OSWRCH
+    ; -- Print the boot message --
 
-    ; Let's print the boot message.
-    LDY #<bootMessage ; Start at start of messages
-    LDA #>bootMessage ; Get the start address of where the first line of the boot message is.
-    JSR printMessage ; Display the boot message.
-    LDA #>bootMessageRAM ; Get the second line that describes how much RAM there is.
-    JSR printMessage ; Display the RAM boot message.
+    LDY #<bootMessage ; Store the lower 4 bits of the first part into the Y register.
+    LDA #>bootMessage ; Store the upper 4 bits into A register.
+    STA $FE ; Store the high byte of the source address.
+    LDA #0 ; Load 0 into A
+    STA $FD ; Use $00 as the low byte of the address, using offset from Y for source.
+printBootMessageLoop:
+    LDA ($FD),Y ; Read the character at $FD, offset by the value of Y.
+    JSR OSASCI ; Send the character to the ACIA to transmit out of the 'Tx' pin.
+    INY ; Step to next character.
+    CMP #$0 ; A '0' lets BBC Basic know when to stop reading. Let's check if that's the case.
+    BNE printBootMessageLoop ;  If A is not 0, read the next character.
 
-    ; Print two line breaks to have a one line gap between the previous line and the next line.
-    JSR OSNEWL
-    JSR OSNEWL
-
-    ; Print the ROM title ("BASIC" by default).
-    ; The higher four bits contain the location of the ROM Title
-    ; The lower four bits of $8008 contains the length of the string.
-    ; These two things are exactly what we need for the 'printMessage' routine.
-    LDA #>($8008) ; Store the location of the string into A.
-    LDY #<($8008) ; Store the length of the string into Y.
-    JSR printMessage
-
-    ; Print two line breaks to have a one line gap from the command prompt (The '>')
-    JSR OSNEWL
-    JSR OSNEWL
+    ; -- Enter BBC BASIC --
 
     CLC ; Clear the carry bit to tell the BBC BASIC we are entering from RESET.
     LDA #$01 ; Load '1' into the accumulator to tell BBC BASIC we are starting up.
     CLI ; Enable interrupts, now that we're done initialising all our memory and peripherals.
-    JMP BASIC ; Enter BBC BASIC!
+    JMP BASIC ; Enter BBC BASIC! 
+    ; This is the end of the reset sequence.
+
+
 
 ; -- OS Call Routines --
 
@@ -881,23 +867,6 @@ lcd_init_delay_loop:
     DEX             ; Decrement X
     BNE lcd_init_delay_loop  ; Branch if not zero (X != 0) to delay_loop
     RTS
-
-; -- Miscellaneous Subroutines --
-
-; Subroutine to print a string. Right now this is only used for the boot message.
-; printMessage will start reading at the address stored in A, plus the raw value stored in Y.
-; e.g. if A is "08" and Y is "4", printMessage will read the ASCII character stored at $8008 + 4 bytes (which is $800C).
-printMessage:
-    STA $FE ; Store the high byte of the source address.
-    LDA #0 ; Load 0 into A
-    STA $FD ; Use $00 as the low byte of the address, using offset from Y for source.
-printMessageLoop:
-    INY ; Step to next character. On first pass will step to first char.
-    LDA ($FD),Y ; Read the character at $FD, offset by the value of Y.
-    JSR OSASCI ; Send the character to the ACIA to transmit out of the 'Tx' pin.
-    CMP #$0 ; A '0' lets BBC Basic know when to stop reading. Let's check if that's the case.
-    BNE printMessageLoop ;  If A is not 0, read the next character.
-    RTS ; Return to where we were before 'printMessage' was called.
 
 ; -- Interrupt Handling --
 
