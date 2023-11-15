@@ -1,8 +1,6 @@
-; BeebEater v0.4 - BBC MOS for the Ben Eater 6502.
+; BeebEater v0.4.2 - BBC BASIC port for the Ben Eater 6502.
 ; by Chelsea Wilkinson (chelsea6502)
 ; https://github.com/chelsea6502/BeebEater
-
-; JGH: Handful of initial corrections.
 
 ; -- Constants --
 
@@ -10,18 +8,8 @@
 BASIC = $8000 ; the entry point for language rom.
 START = $C000 ; the entry point for BeebEater.
 
-; BBC MOS specific memory addresses.
-; $00-$8F Language workspace
-; $90-$9F Network workspace
-; $A0-$A7 NMI workspace
-; $A8-$AF Non-MOS *command workspace
-; $B0-$BF Temporary filing system workspace
-; $C0-$CF Persistant filing system workspace
-; $D0-$DF VDU driver workspace
-; $E0-$EB Internal MOS workspace
-; $EC-$EE Keyboard workspace
-; $EF-$FF MOS API workspace
-;
+; We're going to use the same constant names from the original BBC Micro/Master OS (a.k.a 'BBC MOS'). 
+; See https://mdfs.net/Docs/Comp/BBC/AllMem for details.
 OSVDU  =$D0
 OSKBD1 =$EC
 OSKBD2 =OSKBD1+1
@@ -29,33 +17,30 @@ OSKBD3 =OSKBD1+2
 OSAREG =$EF
 OSXREG =$F0
 OSYREG =$F1
-OSCTRL =OSXREG
-OSLPTR =$F2
 OSINTA =$FC
 OSFAULT=$FD
 OSESC  =$FF
+TIME   =$0292 ; A 5-byte memory location ($0292-$0296) that counts the number of 'centiseconds' since booting up. We use this for the TIME function.
 OSVDUWS=$0300
 
+; For some, we'll set some aliases so it's easier to understand their purpose.
 READBUFFER      = OSKBD1  ; this stores the latest ASCII character that was sent into the ACIA
 KEYBOARD_FLAGS  = OSKBD2  ; This byte helps us keep track of the state of a key presses on the keyboard. See below.
 LCDREADBUFFER   = OSVDU+2 ; For storing the last printed ASCII character in the LCD.
 LCDCURSORBUFFER = OSVDU+3 ; For storing the current LCD cursor position.
-LCDBUFFER       = OSVDUWS+0 ; For storing a line of LCD characters.
+LCDBUFFER       = OSVDUWS ; For storing a line of LCD characters.
 
 ; Keyboard flag constants:
 RELEASE = %00000001 ; Flag for if a key has just been released.
 SHIFT   = %00000010 ; Flag for if we are holding down the shift key.
 
-TICKS = $0292 ; A 5-byte memory location ($0292-$0296) that counts the number of 'centiseconds' since booting up. We use this this for the TIME function.
-
-; Hardware locations
-; Next, let's define where our ACIA is. $5000 is the default.
+; ACIA definitions. $5000 is the default.
 ACIA_DATA = $5000
 ACIA_STATUS = $5001 ; Status register
 ACIA_CMD = $5002 ; Command register
 ACIA_CTRL = $5003 ; Control register
 
-; Next, let's define where the VIA is. $6000 is the default.
+; VIA definitions. $6000 is the default.
 PORTB = $6000 ; Location of register B on the VIA. Keep this available for the future LCD update.
 PORTA = $6001 ; Location of register A on the VIA.
 DDRB = $6002 ; "Data Direction Register B"
@@ -72,7 +57,7 @@ E  = %01000000
 RW = %00100000
 RS = %00010000
 
-; BBC MOS "OS Calls". Code calls these addresses when it wants to use your hardware for something.
+; BBC MOS "OS Calls". These addresses point to routines that access your hardware.
 OSRDCH = $FFE0 ; "OS Read Character" - Transfers the characters read from the 6551 ACIA into Register A (Accumulator)
 OSASCI = $FFE3 ; "OS ASCII" - Print an ASCII character stored in Register A (Accumulator)
 OSNEWL = $FFE7 ; "OS New Line" - Print the 'CR' ASCII character, followed by the 'LF' character. These two characters make up a new line.
@@ -216,11 +201,11 @@ reset:
 
     ; Reset the part in memory that stores the time elapsed (in 'centiseconds') since boot.
     LDA #0
-    STA TICKS
-    STA TICKS + 1
-    STA TICKS + 2
-    STA TICKS + 3
-    STA TICKS + 4
+    STA TIME
+    STA TIME + 1
+    STA TIME + 2
+    STA TIME + 3
+    STA TIME + 4
 
     ; To print characters, BBC BASIC uses the address stored in $020F-$020E. We need to load those addresses with our OSWRCH routine.
     LDA #>OSWRCHV ; Get the high byte of the write character routine.
@@ -234,11 +219,11 @@ reset:
     LDA #>bootMessage ; Store the upper 4 bits into A register.
     STA $FE ; Store the high byte of the source address.
     LDA #0 ; Load 0 into A
-    STA $FD ; Use $00 as the low byte of the address, using offset from Y for source.
+    STA $FD ; Use 0 as the low byte of the address, using offset from Y for source.
 printBootMessageLoop:
     LDA ($FD),Y ; Read the character at $FD, offset by the value of Y.
     JSR OSASCI ; Send the character to the ACIA to transmit out of the 'Tx' pin.
-    INY ; Step to next character.
+    INY ; Step to the next character.
     CMP #$0 ; A '0' lets BBC Basic know when to stop reading. Let's check if that's the case.
     BNE printBootMessageLoop ;  If A is not 0, read the next character.
 
@@ -249,7 +234,6 @@ printBootMessageLoop:
     CLI ; Enable interrupts, now that we're done initialising all our memory and peripherals.
     JMP BASIC ; Enter BBC BASIC! 
     ; This is the end of the reset sequence.
-
 
 
 ; -- OS Call Routines --
@@ -460,14 +444,14 @@ Escape:
     RTS
 
 ; OSWORD 1: Read System Timer
-; The variable TIME is a 5-byte variable starting at address 'TICKS'.
+; The variable TIME is a 5-byte variable starting at address 'TIME'.
 ; To read the timer, let's loop through the 5 bytes and store them in the control block
 OSWORD1V:
     LDX #0                              
 readTimer:
     LDY #4 ; Use this to read the 5 bytes. This will run down from 4 to 0.
 readTimerLoop:
-    LDA TICKS,X ; Load the TICKS byte, offset by X. X will be either 0, 1, 2, 3, or 4.
+    LDA TIME,X ; Load the TIME byte, offset by X. X will be either 0, 1, 2, 3, or 4.
     STA (OSXREG),Y ; Store into control block offset by Y. Y will be either 4, 3, 2, 1, or 0.               
     INX                                                
     DEY                 
@@ -477,13 +461,13 @@ readTimerLoop:
 
 ; OSWORD 2: Write System Timer
 ; To write the timer, let's essentially do the opposite of 'Read System Timer'
-; Let's loop through the 5 bytes in control block, and store them in the 5-byte variable starting at address 'TICKS'.
+; Let's loop through the 5 bytes in control block, and store them in the 5-byte variable starting at address 'TIME'.
 OSWORD2V:
     LDX #0
     LDY #4
 writeTimerLoop:
     LDA (OSXREG),Y ; Same principle as 'readTimerLoop'.
-    STA TICKS, X
+    STA TIME, X
     INX
     DEY
     BPL writeTimerLoop
@@ -900,15 +884,15 @@ irq_keyboard: ; If we've ruled out the ACIA, then let's try the keyboard.
     JMP end_irq ; Finish the interrupt.
 irq_via_tick: ; If we've ruled out the ACIA, then let's assume it was the VIA timer.
     LDA T1CL ; Clear the interrupt by reading the timer.
-    INC TICKS + 4 ; Increment the 4th byte, which holds the lowest byte.
+    INC TIME + 4 ; Increment the 4th byte, which holds the lowest byte.
     BNE end_irq ; If the byte didn't overflow from FF to 00, then we've done all we need. Skip to the end.
-    INC TICKS + 3 ; If it DID overflow, then let's carry the 1 to the next register.
+    INC TIME + 3 ; If it DID overflow, then let's carry the 1 to the next register.
     BNE end_irq ; If the byte didn't overflow from FF to 00, then we've done all we need. Skip to the end.
-    INC TICKS + 2 ; If it DID overflow, then let's carry the 1 to the next register.
+    INC TIME + 2 ; If it DID overflow, then let's carry the 1 to the next register.
     BNE end_irq ; etc etc
-    INC TICKS + 1
+    INC TIME + 1
     BNE end_irq
-    INC TICKS
+    INC TIME
 end_irq:
     LDA OSINTA ; Restore what was in the A register before we were so rudely interrupted
     RTI ; "ReTurn from Interrupt" Restore caller's flags, return to caller.
