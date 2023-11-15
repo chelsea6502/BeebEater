@@ -12,6 +12,8 @@ _**BeebEater is designed for beginners. My goal for BeebEater is to be the go-to
 
 No extra modifications are required. All you need to do is load `BeebEater.rom` into EEPROM, and then reset.
 
+_You can also try out BeebEater in an emulator without the need for hardware! See [Emulator](#emulator) for details._
+
 > [!WARNING]  
 > Consider BeebEater still in ALPHA until version v1.0 is released. Let me know of any issues you find by submitting a new issue in the "Issues" tab on this GitHub repo. If your issue is not already there, I don't know it exists yet. Thanks!
 
