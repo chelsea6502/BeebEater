@@ -926,9 +926,7 @@ BRKV:
 
    .org $c500
 
-; Keep this 14.2kb of EEPROM space open for the SAVE/LOAD feature in BeebEater v1.0.
-; In other words, Everything above must be less than 1152 bytes. As of v0.4, we are currently at 1143 bytes. 
-; This space will allow you to save/load your BBC BASIC program to ROM storage!
+    ; Keep this 14.2kb of EEPROM space open for the SAVE/LOAD feature in BeebEater v1.0.
 
    .org $fd00
 keymap:
