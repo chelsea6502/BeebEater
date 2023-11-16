@@ -87,7 +87,7 @@ IRQ = $FFFE ; Maskable interupts
 ;;; BASIC
 ;;;
 ;;; >
-bootMessage: ; The first line of the boot message.
+bootMessage:
     .byte $0C ; Start with a 'form feed' ASCII character. This clears the screen.
     .text "BeebEater Computer " ; Describes the computer system.
     .text "16K" ; 16k for 16 kilobytes of RAM available. Feel free to change it if you change your RAM capacity.
@@ -105,10 +105,6 @@ bootMessage: ; The first line of the boot message.
 ; Let's set any hardware-specific things here.
 reset:
     ; -- ACIA 6551 Initialisation --
-
-    ; Soft reset the 6551 ACIA by writing 0 to the status register.
-    LDA #0
-    STA ACIA_STATUS 
 
     ; Intialise ACIA the command register
     LDA #%00001001 ; No parity, no echo, with interrupts after every time we recieve a byte.
@@ -273,23 +269,14 @@ escapeCondition:
 ; The 'V' in "OSWRCHV" means "Vector". When BBC BASIC jumps to the OSWRCH address, it jumps straight to here.
 OSWRCHV:
     STA ACIA_DATA ; Send the character to the ACIA where it will immediately try to transmit it through 'Tx'.
+
+    ; Because of the WDC 6551 ACIA transmit bug, We need around 86 microseconds between now and the end of RTS (assuming 115200 baud & 1mhz clock).
+    ; Luckily, the LCD's print_char routine will always take enough time to cover this.
     PHP ; Save caller's interupt state
     SEI ; Disable interrupts while we are printing a character.
     JSR print_char ; Also print the same character to the LCD.
-WAIT_SETUP: ; This is only needed for the Western Design Center (WDC) version of the 6551 ACIA, thanks to the famous bug where the 'transmit register full' bit doesn't work properly.
-    ; The bug means that we have to wait enough clock cycles to be sure that the byte has been transmitted fully before sending the next character.
-    ; Assuming 1Mhz clock speed and 115200 baud rate, we need to loop WAIT_LOOP 18 times (#$12 in hex) before we can send the next character.
-    ; Don't worry! At 115200 baud, the wait time is around 0.01 millisecond.
-    PHX ; 3 clock cycles
-    LDX #$12 ; Number of WAIT_LOOPs. Calculated by: ((1 / (baud rate)) * ((Clock rate in Hz) * 10) - 18) / 4
-WAIT_LOOP:
-    DEX ; 2 clock cycles for every loop,
-    BNE WAIT_LOOP ; 2 clock cycles for every loop, plus an extra 1 to leave the loop.
-    PLX ; 4 cycles. Called only once.
-OSWRCHV_RETURN: ; make sure this is still included if have commented WAIT_SETUP and WAIT_LOOP out
-    PLP ; Restore caller's interupt state
-    CLI ; Enable interrupts again
-    RTS ; 6 cycles
+    PLP ; Restore caller's interupt state.
+    RTS
 
 ; OSBYTE: 'OS Byte'
 ; A group of system calls that only involve up to two bytes into the X and Y registers.
@@ -717,6 +704,12 @@ print_char:
     JMP print_ascii ; Otherwise, let's print it.
     
 print_char_exit:
+    ; Let's waste some time while the ACIA is still transmitting the character (see OSWRCH).
+    LDA #%00010000 ; Move cursor right
+    JSR lcd_instruction
+    LDA #%00010100 ; Move cursor left
+    JSR lcd_instruction
+
     JMP exit_lcd ; This is a JMP instead of a branch because the exit_lcd routine address is too far away from here to branch.
 lcd_print_escape:
     LDA #%00000001 ; If the escape character was pressed, let's clear the display.
