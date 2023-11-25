@@ -917,10 +917,7 @@ BRKV:
     JMP ($0202)     
 
 
-   .org $c500
-
-    ; Keep this 14.2kb of EEPROM space open for the SAVE/LOAD feature in BeebEater v1.0.
-
+    // Define the mapping from PS/2 Scancode to ASCII
    .org $fd00
 keymap:
     .byte "????????????? `?" ; 00-0F
