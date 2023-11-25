@@ -917,7 +917,7 @@ BRKV:
     JMP ($0202)     
 
 
-    // Define the mapping from PS/2 Scancode to ASCII
+    ; Define the mapping from PS/2 Scancode to ASCII
    .org $fd00
 keymap:
     .byte "????????????? `?" ; 00-0F
