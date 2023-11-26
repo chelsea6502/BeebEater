@@ -282,22 +282,22 @@ OSWRCHV:
     ; OSBYTE $83: "Read OSHWM" - This tells the caller the minimum memory address we can use for BASIC programs (A.K.A the start of 'PAGE' memory). 
         ; $0800 by default, because we need to reserve $0100-$03FF for the MOS, and $400-$7FF for fixed space for the language.
 OSBYTEV: 
-    CMP #$7E ; is it the 'acknowledge escape' system call?
+    CMP #$7E ; Is it the 'acknowledge escape' system call?
     BEQ OSBYTE7E ; Jump to the 'acknowledge escape' routine.
     CMP #$84 ; Is it the 'read top of memory' system call?
     BEQ OSBYTE84 ; Put address '$4000' in YX registers.
     CMP #$83 ; Is it the 'read bottom of memory' system call?
-    BEQ OSBYTE83 ; Put address '$0080' in YX registers.
+    BEQ OSBYTE83 ; Put address '$0800' in YX registers.
     RTS ; Otherwise, return with nothing. 
 
 OSBYTE7E: ; Routine that 'acknowledges' the escape key has been pressed.
-    LDX #0 ; Reset X
-    BIT $FF   ; check for the ESCAPE flag. 'BIT' just checks bit 7 and 6.
-    BPL clearEscape  ; if there's no ESCAPE flag then just clear the ESCAPE condition.
-    LDX #$FF   ; If escape HAS been pressed, set X=$FF to indicate ESCAPE has been acknowledged
+    LDX #0 ; Reset X, in case X is currently set to #$FF aleady.
+    BIT OSESC   ; check for the ESCAPE flag. 'BIT' just checks bit 7 and 6.
+    BPL clearEscape  ; if there's no ESCAPE flag, then just clear the ESCAPE condition.
+    LDX #$FF   ; If escape HAS been pressed, set X=$FF to indicate ESCAPE has been acknowledged.
 clearEscape:
-    CLC    ; Clear bit 7 of the ESCAPE flag.
-    ROR $FF 
+    CLC    ; Clear the carry bit
+    ROR OSESC ; Clear bit 7 of the ESCAPE flag.
     RTS 
 
 OSBYTE84: ; Routine to return the highest address of free RAM space.
