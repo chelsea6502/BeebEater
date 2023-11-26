@@ -77,6 +77,9 @@ IRQ = $FFFE ; Maskable interupts
                                 ; Sourced from: https://mdfs.net/Software/BBCBasic/6502/
                                 ; Download the one from the "Acorn BBC Master" section.
 
+    ; incbin "Basic2.rom"  ; Want to run BASIC programs designed for the BBC Micro? Try version 2 instead.
+                                ; Download the one from the "Acorn BBC Micro" section.
+
     .org START ; set the start of BeebEater at $C000.
 
 ; -- ROM Constants. Unlike the constants before, these are actually stored in the EEPROM. --
@@ -211,26 +214,25 @@ reset:
 
     ; -- Print the boot message --
 
-    LDY #<bootMessage ; Store the lower 4 bits of the first part into the Y register.
-    LDA #>bootMessage ; Store the upper 4 bits into A register.
+    LDY #<bootMessage ; Store the lower 4 bits of the boot message address into the Y register.
+    LDA #>bootMessage ; Store the upper 4 bits of the address into the A register.
     STA $FE ; Store the high byte of the source address.
-    LDA #0 ; Load 0 into A
-    STA $FD ; Use 0 as the low byte of the address, using offset from Y for source.
+    LDA #0 ; 
+    STA $FD ; Make sure $FD is 0.
 printBootMessageLoop:
-    LDA ($FD),Y ; Read the character at $FD, offset by the value of Y.
+    LDA ($FD),Y ; Read the character at $FE-$FD, offset by the value of Y.
     JSR OSASCI ; Send the character to the ACIA to transmit out of the 'Tx' pin.
     INY ; Step to the next character.
-    CMP #$0 ; A '0' lets BBC Basic know when to stop reading. Let's check if that's the case.
+    CMP #$0 ; If we read a '0', that's when we stop reading the string.
     BNE printBootMessageLoop ;  If A is not 0, read the next character.
 
     ; -- Enter BBC BASIC --
 
     CLC ; Clear the carry bit to tell the BBC BASIC we are entering from RESET.
-    LDA #$01 ; Load '1' into the accumulator to tell BBC BASIC we are starting up.
+    LDA #$01 ; Load a '1' into the accumulator to tell BBC BASIC we are starting up.
     CLI ; Enable interrupts, now that we're done initialising all our memory and peripherals.
     JMP BASIC ; Enter BBC BASIC! 
     ; This is the end of the reset sequence.
-
 
 ; -- OS Call Routines --
 
@@ -239,22 +241,28 @@ printBootMessageLoop:
 ; We use this to receive input from your keyboard to the the caller.
 ; It also checks if the escape key has been pressed. If it has, it lets the caller know so it needs to leave whatever it's running.
 OSRDCHV:
-    BIT OSESC ; Is the escape flag set?
-    BPL readCharacter ; If not, jump ahead to read the character.
-    SEC ; If the escape flag IS set, set the carry bit and exit early without reading the character.
-    RTS
-readCharacterBuffer:
+    ; First, check for escape flag
+    BIT OSESC ; if the escape flag set?
+    BMI isEscape ; Skip reading and jump to escape handling.
+
     ; If there's no escape flag set, let's check the READBUFFER to see if it's full.
     ; We don't read the ACIA directly here. We use the IRQ interrupt handler to read the character and place it into READBUFFER.
     ; A full READBUFFER essentially means that there's a character that's been received by the ACIA that hasn't been read yet.
     LDA READBUFFER ; Is there something in the buffer?
     BEQ OSRDCHV ; If not, keep waiting.
-    PHA ; If there IS something in the buffer, let's save A, and clear the buffer.
+    PHA ; Save A
     LDA #0
     STA READBUFFER ; Clear the character buffer
     PLA ; Restore A
-    CLC ; Let's clear the carry bit. BBC BASIC uses the carry bit to track if we're in an 'escape condition' or not.
-    RTS ; Return to the main routine.
+    CMP #$1B ; First, let's check if it's an escape key.
+    BEQ isEscape ; Is it an escape key? Let's skip ahead to the 'escapeCondition' routine.
+notEscape:
+    CLC ; If it's not an escape, let's clear the carry bit. BBC BASIC uses the carry bit to track if we're in an 'escape condition' or not.
+    RTS ; Return to the main routine
+isEscape:
+    SEC ; If it IS an escape, let's set the carry bit.
+    LDA #$1B ; Load the 'ESC' ASCII character into A.
+    RTS
 
 ; OSWRCH: 'OS Write Character'
 ; System call that displays whatever character is in A. This doesn't necessarily have to be an ASCII character.
@@ -294,8 +302,8 @@ OSBYTE7E: ; Routine that 'acknowledges' the escape key has been pressed.
     BPL clearEscape  ; if there's no ESCAPE flag then just clear the ESCAPE condition.
     LDX #$FF   ; If escape HAS been pressed, set X=$FF to indicate ESCAPE has been acknowledged
 clearEscape:
-    CLC    ; Clear the carry bit to let caller know there's no more escape state to process.
-    ROR $FF ; set/clear bit 7 of ESCAPE flag
+    CLC    ; Clear bit 7 of the ESCAPE flag.
+    ROR $FF 
     RTS 
 
 OSBYTE84: ; Routine to return the highest address of free RAM space.
@@ -416,10 +424,12 @@ newLineAndExit:
     PLP ; Restore flags
     LDA $FF ; Get escape flag
     ROL ; Put bit 7 into the carry bit in the status register
+    CLI
     RTS
 Escape:
     PLP
     SEC
+    CLI
     RTS
 
 ; OSWORD 1: Read System Timer
@@ -909,7 +919,7 @@ BRKV:
     JMP ($0202)     
 
 
-    // Define the mapping from PS/2 Scancode to ASCII
+    ; Define the mapping from PS/2 Scancode to ASCII
    .org $fd00
 keymap:
     .byte "????????????? `?" ; 00-0F
