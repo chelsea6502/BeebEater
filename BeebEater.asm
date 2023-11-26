@@ -350,22 +350,18 @@ osword0setup:
     LDA (OSXREG),Y
     STA $02B3-2,Y ; TODO: Remember and explain why we need to subtract 2.
     DEY
-    CPY #2 ; loop until it's 1
+    CPY #2 ; loop until Y = 1
     BCS osword0setup
 
-    ; store input buffer addresses into memory (temporary buffer)
+    ; Store the input buffer addresses into a temporary buffer
     LDA (OSXREG),Y ; Get value (high byte) from zero-page. Y is 1 right now.
     STA $E9 ; Store into temporary buffer (high byte)
-
-    LDY #$00
-    STY $0269 ; [store 0 in 'paged mode counter'? This needs be here, otherwise we get 'Syntax Error' for everything]
-
+    DEY ; Set Y from 1 to 0.
     LDA (OSXREG),Y ; Get value (low byte) from zero-page
     STA $E8 ; Store into temporary buffer (low byte)
 
     CLI ; Explicitly enable interrupts to allow background keypress processing
     BCC readInputCharacter
-
 readLineInputBufferFull:
     LDA #07 ; Send a 'bell character'
 retryWithoutIncrement:
@@ -491,9 +487,9 @@ shift_up:
 ; Routine to set the 'Shift' flag when we press and hold the Shift key.
 shift_down:
     LDA KEYBOARD_FLAGS
-    ora #SHIFT
+    ORA #SHIFT
     STA KEYBOARD_FLAGS
-    jmp keyboard_interrupt_exit
+    JMP keyboard_interrupt_exit
 
 ; Routine to process what's in PORTA, and store it into READBUFFER for reading later.
 read_key:
@@ -848,8 +844,7 @@ interrupt:
     PLA ; get status register. it's on the stack at this point
     PHA ; put the status flags back on the stack
     AND #$10 ; Check if it's a BRK or an IRQ.
-    BEQ irqv 
-    JMP BRKV ; If it's BRK, that's an error. Go to the BRK vector.
+    BNE BRKV ; If it's BRK, that's an error. Go to the BRK vector.
 irqv: ; Otherwise, it's an IRQ. Let's check what caused the interrupt, starting with the ACIA.
     LDA ACIA_STATUS
     AND #$88 ; Check the ACIA status register to find out if the ACIA is asking to read a character.
@@ -890,25 +885,17 @@ end_irq:
 ; Handler for interrupts that we know were called by the BRK instruction. This means an error was reported.
 ; The BBC MOS API defines the structure of an error message. To get the message, we need to store the location of the error message in addresses $FD and $FE. 
 BRKV:
-    TXA ; Save X to the stack, so we can restore it later
-    PHA
+    PHX                 ; Save X
 
-    TSX             ; Get the value of the stack pointer and store it in X
-    LDA $0100 + 3,X ; Get the low byte of the error message. This is stored in the stack.
-    SEC             ; Set the carry bit in the 6502 status register.
-    SBC #1          ; Subtract 1. SBC = "SuBtract if Carry set". This will always subtract 1 because we just set it. Need to subtract one as BRK stacks address of BRK+2 rather than the BRK+1 that we need.
-    STA OSFAULT         ; Store it into $FD
-    
-    LDA $0100 + 4,X ; Get the high byte of the error message. This is stored in the stack.
-    SBC #0          ; Subtract 1 if the carry bit is set.
-    STA $FE         ; Store high byte into $FE
-    STX OSXREG         ; Store the stack pointer in OSXREG.
+    TSX                 ; Get the stack pointer value
+    LDA $0103,X         ; Get the low byte of the error message location, offset by the stack pointer.
+    DEC                 ; Subtract one, as BRK stores BRK+2 to the stack by default, rather than the BRK+1 that we need.
+    STA OSFAULT         ; Store the low byte into the fault handler.
+    LDA $0104,X         ; Get the high byte of the error message location.
+    STA OSFAULT+1       ; Store the high byte into the fault handler.
 
-    PLA             ; Restore the original value of X
-    TAX                 
-
-    ; Jump to current error handler, which takes it from there. It's stored in $0202.
-    JMP ($0202)     
+    PLX                 ; Restore X
+    JMP ($0202)         ; Jump to BBC BASIC's error handler routine, which takes it from there. Address $0202 points to the routine.
 
 
     ; Define the mapping from PS/2 Scancode to ASCII
