@@ -241,28 +241,22 @@ printBootMessageLoop:
 ; We use this to receive input from your keyboard to the the caller.
 ; It also checks if the escape key has been pressed. If it has, it lets the caller know so it needs to leave whatever it's running.
 OSRDCHV:
-    ; First, check for escape flag
-    BIT OSESC ; if the escape flag set?
-    BMI isEscape ; Skip reading and jump to escape handling.
-
+    BIT OSESC ; Is the escape flag set?
+    BPL readCharacterBuffer ; If not, jump ahead to read the character.
+    SEC ; If the escape flag IS set, set the carry bit and exit early without reading the character.
+    RTS
+readCharacterBuffer:
     ; If there's no escape flag set, let's check the READBUFFER to see if it's full.
     ; We don't read the ACIA directly here. We use the IRQ interrupt handler to read the character and place it into READBUFFER.
     ; A full READBUFFER essentially means that there's a character that's been received by the ACIA that hasn't been read yet.
-    LDA READBUFFER ; Is there something in the buffer?
-    BEQ OSRDCHV ; If not, keep waiting.
-    PHA ; Save A
+    LDA READBUFFER ; Read what's in READBUFFER.
+    BEQ readCharacterBuffer ; If it's empty, keep reading until it's full.
+    PHA ; Once it has something in it, save A and clear the buffer.
     LDA #0
     STA READBUFFER ; Clear the character buffer
     PLA ; Restore A
-    CMP #$1B ; First, let's check if it's an escape key.
-    BEQ isEscape ; Is it an escape key? Let's skip ahead to the 'escapeCondition' routine.
-notEscape:
-    CLC ; If it's not an escape, let's clear the carry bit. BBC BASIC uses the carry bit to track if we're in an 'escape condition' or not.
-    RTS ; Return to the main routine
-isEscape:
-    SEC ; If it IS an escape, let's set the carry bit.
-    LDA #$1B ; Load the 'ESC' ASCII character into A.
-    RTS
+    CLC ; Clear the carry bit. BBC BASIC uses the carry bit to track if we're in an 'escape condition' or not.
+    RTS ; Return to the main routine.
 
 ; OSWRCH: 'OS Write Character'
 ; System call that displays whatever character is in A. This doesn't necessarily have to be an ASCII character.
