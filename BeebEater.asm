@@ -239,30 +239,22 @@ printBootMessageLoop:
 ; We use this to receive input from your keyboard to the the caller.
 ; It also checks if the escape key has been pressed. If it has, it lets the caller know so it needs to leave whatever it's running.
 OSRDCHV:
-    ; First, check for escape flag
-    BIT OSESC ; if the escape flag set?
-    BMI escapeCondition ; Skip reading and jump to escape handling.
-
+    BIT OSESC ; Is the escape flag set?
+    BPL readCharacter ; If not, jump ahead to read the character.
+    SEC ; If the escape flag IS set, set the carry bit and exit early without reading the character.
+    RTS
+readCharacterBuffer:
     ; If there's no escape flag set, let's check the READBUFFER to see if it's full.
     ; We don't read the ACIA directly here. We use the IRQ interrupt handler to read the character and place it into READBUFFER.
     ; A full READBUFFER essentially means that there's a character that's been received by the ACIA that hasn't been read yet.
     LDA READBUFFER ; Is there something in the buffer?
-    BEQ OSRDCHV ; If it's still empty, keep waiting.
-    CMP #$1B
-    BEQ escapeCondition ; Escape key pressed
-    PHA ; Otherwise, it's full. Let's save A to the stack so we can use it for later.
+    BEQ OSRDCHV ; If not, keep waiting.
+    PHA ; If there IS something in the buffer, let's save A, and clear the buffer.
     LDA #0
     STA READBUFFER ; Clear the character buffer
-    PLA ; Restore A from the stack
-    CLC ; CC=Not Escape
-    RTS ; Return to the main routine
-escapeCondition:
-    ; If we're here, that means that the user just pressed the escape key. This should signal to BBC BASIC to stop whatever it's doing.
-    LDA #0
-    STA READBUFFER ; clear the character buffer by writing '0' to it
-    SEC ; CS=Escape key pressed
-    LDA #$1B ; Load the 'ESC' ASCII character into A.
-    RTS
+    PLA ; Restore A
+    CLC ; Let's clear the carry bit. BBC BASIC uses the carry bit to track if we're in an 'escape condition' or not.
+    RTS ; Return to the main routine.
 
 ; OSWRCH: 'OS Write Character'
 ; System call that displays whatever character is in A. This doesn't necessarily have to be an ASCII character.
