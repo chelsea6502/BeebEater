@@ -840,31 +840,38 @@ lcd_init_delay_loop:
 ; Subroutine called after every NMI or IRQ in hardware, or the BRK instruction in software.
 interrupt:
     STA OSINTA ; Save A for later.
-    CLD ; Ensure we are operating in binary.                    
-    PLA ; get status register. it's on the stack at this point
-    PHA ; put the status flags back on the stack
+    CLD ; Ensure we are operating in binary mode.                    
+    PLA ; Get the status register. IRQ/BRK puts it on the stack.
+    PHA ; Keep the status register on the stack for later.
     AND #$10 ; Check if it's a BRK or an IRQ.
     BNE BRKV ; If it's BRK, that's an error. Go to the BRK vector.
 irqv: ; Otherwise, it's an IRQ. Let's check what caused the interrupt, starting with the ACIA.
     LDA ACIA_STATUS
     AND #$88 ; Check the ACIA status register to find out if the ACIA is asking to read a character.
-    BEQ irq_keyboard ; If there's nothing to read, then we'll try the keyboard
-irq_acia:
-    LDA ACIA_DATA ; Read the ACIA. Because reading the ACIA clears the data, this is the only place allowed to read it directly!
-    STA READBUFFER ; For everywhere else that needs to access the character, we will store in memory.
-    CMP #$1B ; check if an escape key was pressed
-    BNE end_irq ; If it's not an escape key, we've done everything we need. Skip to the end.
-irq_escape: ; If an escape key was pressed, let's set the escape flag.
-    LDA #$FF
-    STA OSESC ; set the 'escape flag'.
-    JMP end_irq ; Skip to the end.
-irq_keyboard: ; If we've ruled out the ACIA, then let's try the keyboard.
+    BNE irq_acia ; If yes, jump to the acia handler.
     LDA IFR ; Check the "Interrupt Flag Register" to make sure it was the keyboard that caused the interrupt.
     AND #%00000010 ; We have to check bit 2.
-    BEQ irq_via_tick ; Bit 2 isn't set? Let's asume it was the timer instead.
-    JSR keyboard_interrupt ; Jump to the routing that reads PORTA and stores the character into READBUFFER.
+    BNE irq_keyboard 
+    BEQ irq_via_tick ; If we've ruled out the ACIA and Keyboard, let's assume it was the timer.
+end_irq:
+    LDA OSINTA ; Restore A
+    RTI ; "ReTurn from Interrupt" Restore caller's flags, return to caller.
+
+irq_acia:
+    LDA ACIA_DATA ; Read the ACIA. Because reading the ACIA clears the data, this is the only place allowed to read it directly!
+    STA READBUFFER ; Store it in memory for OSWRCHV to use.
+    CMP #$1B ; Check if an escape key was pressed
+    BNE end_irq ; If it's not an escape key, we've done everything we need. Skip to the end.
+    LDA #$FF ; If an escape key was pressed, let's set the escape flag.
+    STA OSESC ; set the 'escape flag'.
+    LDA OSINTA ; Restore A
+    RTI ; "ReTurn from Interrupt" Restore caller's flags, return to caller.
+    
+irq_keyboard: ; If we've ruled out the ACIA, then let's try the keyboard.
+    JSR keyboard_interrupt ; Jump to the routine that reads PORTA and stores the character into READBUFFER.
     JMP end_irq ; Finish the interrupt.
-irq_via_tick: ; If we've ruled out the ACIA, then let's assume it was the VIA timer.
+
+irq_via_tick: ; If we've ruled out the ACIA & keyboard, then let's assume it was the VIA timer.
     LDA T1CL ; Clear the interrupt by reading the timer.
     INC TIME + 4 ; Increment the 4th byte, which holds the lowest byte.
     BNE end_irq ; If the byte didn't overflow from FF to 00, then we've done all we need. Skip to the end.
@@ -875,9 +882,6 @@ irq_via_tick: ; If we've ruled out the ACIA, then let's assume it was the VIA ti
     INC TIME + 1
     BNE end_irq
     INC TIME
-end_irq:
-    LDA OSINTA ; Restore what was in the A register before we were so rudely interrupted
-    RTI ; "ReTurn from Interrupt" Restore caller's flags, return to caller.
 
 
 ; -- BREAK Handler --
