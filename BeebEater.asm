@@ -853,10 +853,6 @@ irqv: ; Otherwise, it's an IRQ. Let's check what caused the interrupt, starting 
     AND #%00000010 ; We have to check bit 2.
     BNE irq_keyboard 
     BEQ irq_via_tick ; If we've ruled out the ACIA and Keyboard, let's assume it was the timer.
-end_irq:
-    LDA OSINTA ; Restore A
-    RTI ; "ReTurn from Interrupt" Restore caller's flags, return to caller.
-
 irq_acia:
     LDA ACIA_DATA ; Read the ACIA. Because reading the ACIA clears the data, this is the only place allowed to read it directly!
     STA READBUFFER ; Store it in memory for OSWRCHV to use.
@@ -866,11 +862,9 @@ irq_acia:
     STA OSESC ; set the 'escape flag'.
     LDA OSINTA ; Restore A
     RTI ; "ReTurn from Interrupt" Restore caller's flags, return to caller.
-    
 irq_keyboard: ; If we've ruled out the ACIA, then let's try the keyboard.
     JSR keyboard_interrupt ; Jump to the routine that reads PORTA and stores the character into READBUFFER.
     JMP end_irq ; Finish the interrupt.
-
 irq_via_tick: ; If we've ruled out the ACIA & keyboard, then let's assume it was the VIA timer.
     LDA T1CL ; Clear the interrupt by reading the timer.
     INC TIME + 4 ; Increment the 4th byte, which holds the lowest byte.
@@ -882,6 +876,9 @@ irq_via_tick: ; If we've ruled out the ACIA & keyboard, then let's assume it was
     INC TIME + 1
     BNE end_irq
     INC TIME
+end_irq:
+    LDA OSINTA ; Restore A
+    RTI ; "ReTurn from Interrupt" Restore caller's flags, return to caller.
 
 
 ; -- BREAK Handler --
