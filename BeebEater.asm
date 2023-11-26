@@ -860,8 +860,7 @@ irq_acia:
     BNE end_irq ; If it's not an escape key, we've done everything we need. Skip to the end.
     LDA #$FF ; If an escape key was pressed, let's set the escape flag.
     STA OSESC ; set the 'escape flag'.
-    LDA OSINTA ; Restore A
-    RTI ; "ReTurn from Interrupt" Restore caller's flags, return to caller.
+    JMP end_irq
 irq_keyboard: ; If we've ruled out the ACIA, then let's try the keyboard.
     JSR keyboard_interrupt ; Jump to the routine that reads PORTA and stores the character into READBUFFER.
     JMP end_irq ; Finish the interrupt.
