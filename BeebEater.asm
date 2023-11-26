@@ -338,14 +338,13 @@ OSWORDV:
     RTS             ; Otherwise, return with no change.
 
 OSWORD0V:
-    STA READBUFFER ; Write a '0' to the character buffer, in case there's an escape character currently in there. Kind of a hacky solution, but it works!
-
     ; An OSWORD 0 control block has a couple of bytes of metadata to help us:
     ; 4th byte: Maximum ASCII code allowed
     ; 3rd byte: Minimum ASCII code allowed
     ; 2nd byte: Maximum line length allowed
     ; 1st byte: Address of the first character [I think?]
-    LDY #4 ; Load 
+    STA READBUFFER ; Clear the character buffer.
+    LDY #4
 osword0setup:
     ; Store max/min ASCII codes, and max line length from zero page memory to main memory
     LDA (OSXREG),Y
@@ -430,9 +429,8 @@ Escape:
 ; The variable TIME is a 5-byte variable starting at address 'TIME'.
 ; To read the timer, let's loop through the 5 bytes and store them in the control block
 OSWORD1V:
-    LDX #0                              
-readTimer:
-    LDY #4 ; Use this to read the 5 bytes. This will run down from 4 to 0.
+    LDX #0 ; Use this to read the 5 bytes. This will run up from 0 to 4.                      
+    LDY #4 ; Use this to write the 5 bytes. This will run down from 4 to 0.
 readTimerLoop:
     LDA TIME,X ; Load the TIME byte, offset by X. X will be either 0, 1, 2, 3, or 4.
     STA (OSXREG),Y ; Store into control block offset by Y. Y will be either 4, 3, 2, 1, or 0.               
@@ -450,7 +448,7 @@ OSWORD2V:
     LDY #4
 writeTimerLoop:
     LDA (OSXREG),Y ; Same principle as 'readTimerLoop'.
-    STA TIME, X
+    STA TIME,X
     INX
     DEY
     BPL writeTimerLoop
