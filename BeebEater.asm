@@ -380,7 +380,7 @@ readInputCharacter:
     CMP #$7F                    ; Or, is it a delete? Let's delete the last character.
     BEQ delete
 
-    JMP convertToUppercase          ; Otherwise, move on
+    JMP convertToUppercase      ; Otherwise, move on
 
 delete:
     CPY #0                      ; Are we at the first character?
@@ -458,82 +458,79 @@ keyboard_interrupt:
     ; First, check if we are releasing a key
     LDA KEYBOARD_FLAGS
     AND #RELEASE
-    BEQ read_key ; Skip ahead if we are not releasing a key
+    BNE released_key                ; If we're releasing a key, clear the relevant keyboard flags and end early.
+read_key:
+    ; Process what's in PORTA, and store it into READBUFFER for reading later.
+    LDA PORTA
+    CMP #$F0                    ; If we've read $F0, that means the keyboard is signalling a key was released.
+    BEQ set_release_flag        ; Jump ahead to setting the 'release' flag.
 
-    ; If we ARE releasing a key, let's clear the release flag
+    CMP #$12                    ; Left shift was pressed?
+    BEQ set_shift_flag          ; Set the shift flag
+    CMP #$59                    ; Right shift was pressed?
+    BEQ set_shift_flag          ; Set the shift flag
+
+    ; Convert the PS/2 scancode to an ASCII code.
+    TAX                         ; Transfer the scancode to X register.
+    LDA KEYBOARD_FLAGS          
+    AND #SHIFT                  ; Are we shifted?
+    BNE shifted_key             ; If yes, convert it to a capitalised ASCII set.
+unshifted_key:
+    LDA keymap,X                ; Use the 'keymap' to convert the scancode. Scancode is in X, which will convert to an ASCII stored in A.
+    JMP push_key                ; Move ahead to store the ASCII for processing.
+shifted_key:
+    LDA keymap_shifted,X
+    ; fall through...
+push_key:
+    ; Now that we have the ASCII character stored in A, let's store it in READBUFFER for processing later.
+    STA READBUFFER              ; Store the ASCII into READBUFFER
+    CMP #$1B                    ; Is the character an escape character?
+    BNE keyboard_interrupt_exit ; If not, we are done.
+    LDA #$FF                    ; If it IS the escape character, we need to signal that an escape state is active. 
+    STA OSESC                   ; set the 'escape flag' address at $FF to the value #$FF.
+keyboard_interrupt_exit:
+    PLA                         ; Restore X
+    TAX
+    PLA                         ; Restore A
+    RTS                         ; Return back to the interrupt handler
+
+; -- Keyboard helper routine to process a released key --
+released_key:
+    ; If we ARE releasing a key, let's clear the release flag.
     LDA KEYBOARD_FLAGS
-    EOR #RELEASE ; Flip the release bit. 
+    EOR #RELEASE                ; Flip the release bit. 
     STA KEYBOARD_FLAGS
-    LDA PORTA ; read to clear the interrupt
+    LDA PORTA                   ; read PORTA to clear the interrupt
     
-    ; Check if we are releasing the shift key:
-    CMP #$12 ; is it the left shift?
-    BEQ shift_up ; clear the shift flag
-    CMP #$59 ; is it the left shift?
-    BEQ shift_up ; clear the shift flag
+    ; Clear the shift key if needed:
+    CMP #$12                    ; Releasing the left shift?
+    BEQ clear_shift_flag        ; clear the shift flag
+    CMP #$59                    ; Releasing the right shift?
+    BNE keyboard_interrupt_exit        ; clear the shift flag
     
-    JMP keyboard_interrupt_exit ; We've processed a released key. Skip to the end.
+    JMP keyboard_interrupt_exit ; We've processed a released key. Exit.
 
+; -- Keyboard helper routines to set/clear keyboard flags --
 ; Routine to clear the 'Shift' flag when we release the Shift key.
-shift_up:
+clear_shift_flag:
     LDA KEYBOARD_FLAGS
     EOR #SHIFT
     STA KEYBOARD_FLAGS
     JMP keyboard_interrupt_exit
 
 ; Routine to set the 'Shift' flag when we press and hold the Shift key.
-shift_down:
+set_shift_flag:
     LDA KEYBOARD_FLAGS
     ORA #SHIFT
     STA KEYBOARD_FLAGS
     JMP keyboard_interrupt_exit
 
-; Routine to process what's in PORTA, and store it into READBUFFER for reading later.
-read_key:
-    LDA PORTA
-    CMP #$F0 ; If we've read $F0, that means the keyboard is signalling a key was released.
-    BEQ key_release ; Jump ahead to setting the 'release' flag.
-
-    CMP #$12 ; Left shift was pressed?
-    BEQ shift_down ; Set the shift flag [TODO: investigate why my build starts with the shift flag set by default]
-    CMP #$59 ; Right shift was pressed?
-    BEQ shift_down ; Set the  shift flag
-
-    ; Convert the PS/2 scancode to an ASCII code.
-    TAX ; Transfer the scancode to X register.
-    LDA KEYBOARD_FLAGS
-    AND #SHIFT
-    BNE shifted_key; If yes, convert it to a capitalised ASCII set.
-
-unshifted_key:
-    LDA keymap,X ; Use the 'keymap' to convert the scancode. Scancode is in X, which will convert to an ASCII stored in A.
-    JMP push_key ; Move ahead to store the ASCII for processing.
-
-shifted_key:
-    LDA keymap_shifted,X
-    JMP push_key
-
-; Now that we have the ASCII character stored in A, let's store it in READBUFFER for processing later.
-push_key:
-    STA READBUFFER ; Store the ASCII into READBUFFER
-    CMP #$1B ; Is the character an escape character?
-    BNE keyboard_interrupt_exit ; If not, we are done.
-    LDA #$FF ; If it IS the escape character, we need to signal that an escape state is active. 
-    STA $FF ; set the 'escape flag' address at $FF to the value #$FF.
-    JMP keyboard_interrupt_exit ; We are done.
-
 ; Routine to set the 'Release' flag when we release any key.
-key_release:
+set_release_flag:
     LDA KEYBOARD_FLAGS
     ORA #RELEASE
     STA KEYBOARD_FLAGS
-    JMP keyboard_interrupt_exit ; We are done.
-
-keyboard_interrupt_exit:
-    PLA ; Restore X
-    TAX
-    PLA ; Restore A
-    RTS ; Return back to the interrupt handler
+    JMP keyboard_interrupt_exit
 
 
 ; -- LCD Routines --
