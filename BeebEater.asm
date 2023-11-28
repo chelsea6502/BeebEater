@@ -77,7 +77,7 @@ IRQ = $FFFE ; Maskable interupts
                                 ; Sourced from: https://mdfs.net/Software/BBCBasic/6502/
                                 ; Download the one from the "Acorn BBC Master" section.
 
-    ; incbin "Basic2.rom"  ; Want to run BASIC programs designed for the BBC Micro? Try version 2 instead.
+    ;incbin "Basic2.rom"  ; Want to run BASIC programs designed for the BBC Micro? Try version 2 instead.
                                 ; Download the one from the "Acorn BBC Micro" section.
 
     .org START ; set the start of BeebEater at $C000.
@@ -879,7 +879,8 @@ end_irq:
 ; Handler for interrupts that we know were called by the BRK instruction. This means an error was reported.
 ; The BBC MOS API defines the structure of an error message. To get the message, we need to store the location of the error message in addresses $FD and $FE. 
 BRKV:
-    PHX                 ; Save X
+    TXA
+    PHA                 ; Save X
 
     TSX                 ; Get the stack pointer value
     LDA $0103,X         ; Get the low byte of the error message location, offset by the stack pointer.
@@ -888,7 +889,8 @@ BRKV:
     LDA $0104,X         ; Get the high byte of the error message location.
     STA OSFAULT+1       ; Store the high byte into the fault handler.
 
-    PLX                 ; Restore X
+    PLA                 ; Restore X
+    TAX
     JMP ($0202)         ; Jump to BBC BASIC's error handler routine, which takes it from there. Address $0202 points to the routine.
 
 
