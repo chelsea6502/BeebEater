@@ -451,14 +451,14 @@ writeTimerLoop:
 ; -- Keyboard Interrupt Routines --
 
 keyboard_interrupt:
-    PHA ; Save A
+    PHA                         ; Save A
     TXA
-    PHA ; Save X
+    PHA                         ; Save X
 
-    ; First, check if we are releasing a key
+    ; First, check if are releasing a key, or pressing a key.
     LDA KEYBOARD_FLAGS
     AND #RELEASE
-    BNE released_key                ; If we're releasing a key, clear the relevant keyboard flags and end early.
+    BNE released_key            ; If we're releasing a key, clear the relevant keyboard flags and end early.
 read_key:
     ; Process what's in PORTA, and store it into READBUFFER for reading later.
     LDA PORTA
@@ -506,7 +506,7 @@ released_key:
     CMP #$12                    ; Releasing the left shift?
     BEQ clear_shift_flag        ; clear the shift flag
     CMP #$59                    ; Releasing the right shift?
-    BNE keyboard_interrupt_exit        ; clear the shift flag
+    BNE clear_shift_flag        ; clear the shift flag
     
     JMP keyboard_interrupt_exit ; We've processed a released key. Exit.
 
