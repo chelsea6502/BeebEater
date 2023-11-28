@@ -339,86 +339,83 @@ OSWORDV:
 
 OSWORD0V:
     ; An OSWORD 0 control block has a couple of bytes of metadata to help us:
-    ; 4th byte: Maximum ASCII code allowed
-    ; 3rd byte: Minimum ASCII code allowed
-    ; 2nd byte: Maximum line length allowed
-    ; 1st byte: Address of the first character [I think?]
-    STA READBUFFER ; Clear the character buffer.
+    ; byte 0: address of input buffer for result (low)
+    ; byte 1: address of input buffer for result (high)
+    ; byte 2: maximum line length
+    ; byte 3: minimum acceptable ASCII code
+    ; byte 4: maximum acceptable ASCII code
+    STA READBUFFER ; Clear the character buffer. We know A = 0 right now.
     LDY #4
 osword0setup:
     ; Store max/min ASCII codes, and max line length from zero page memory to main memory
     LDA (OSXREG),Y
-    STA $02B3-2,Y ; TODO: Remember and explain why we need to subtract 2.
+    STA $02B1,Y                 ; Copy bytes 2, 3, and 4 to memory for BBC BASIC to process.
     DEY
-    CPY #2 ; loop until Y = 1
-    BCS osword0setup
+    CPY #1                      ; Loop until Y = 1.
+    BNE osword0setup
 
     ; Store the input buffer addresses into a temporary buffer
-    LDA (OSXREG),Y ; Get value (high byte) from zero-page. Y is 1 right now.
-    STA $E9 ; Store into temporary buffer (high byte)
-    DEY ; Set Y from 1 to 0.
-    LDA (OSXREG),Y ; Get value (low byte) from zero-page
-    STA $E8 ; Store into temporary buffer (low byte)
+    LDA (OSXREG),Y              ; Get value (high byte) from zero-page. Y is 1 right now.
+    STA $E9                     ; Store into temporary buffer (high byte)
+    DEY                         ; Set Y from 1 to 0.
+    LDA (OSXREG),Y              ; Get value (low byte) from zero-page
+    STA $E8                     ; Store into temporary buffer (low byte)
 
-    CLI ; Explicitly enable interrupts to allow background keypress processing
-    BCC readInputCharacter
+    CLI                         ; Explicitly enable interrupts to allow background keypress processing.
+    JMP readInputCharacter      ; Jump ahead to process the next character.
 readLineInputBufferFull:
-    LDA #07 ; Send a 'bell character'
+    LDA #$07                     ; Send a 'bell character'
 retryWithoutIncrement:
-    DEY ; Decrement Y. We are essentially 'cancelling out' the next instruction.
+    DEY                         ; Decrement Y. We are essentially 'cancelling out' the next instruction.
 retryWithIncrement:
-    INY ; Decrement Y. Y is currently holding the current position in the input.
+    INY                         ; Decrement Y. Y is currently holding the current position in the input.
 outputAndReadAgain:
-    JSR OSWRCH ; Print the character. Fall through to 'readInputCharacter'
+    JSR OSWRCH                  ; Print the character. Fall through to 'readInputCharacter'
 readInputCharacter:
-    JSR OSRDCH ; Read the next character from ACIA
-    BCS Escape
+    JSR OSRDCH                  ; Read the next character from ACIA
+    BCS Escape                  ; If OSRDCH has set the carry bit, that means the escape key was pressed. Leave early.
 
-    CMP #$08 ; Is it a backspace? Let's delete the last character.
+    CMP #$08                    ; Is it a backspace? Let's delete the last character.
     BEQ delete
-    CMP #$7F ; Is it a delete? Let's delete the last character.
+    CMP #$7F                    ; Or, is it a delete? Let's delete the last character.
     BEQ delete
 
-    BNE checkLowercase ; Otherwise, move on
+    JMP convertToUppercase          ; Otherwise, move on
+
 delete:
-    CPY #0 ; Are we at the first character?
-    BEQ readInputCharacter ; Then do nothing
-    DEY ; Otherwise, go back 1
-    BCS outputAndReadAgain ; Write the delete character. Go back to the start.
-checkLowercase: 
-    CMP #$61        ; Compare with 'a'
-    BCC notLower    ; If less than 'a', it's not a lowercase letter
-    CMP #$7B        ; Compare with 'z'
-    BCS notLower    ; If greater than 'z', it's not a lowercase letter
-    AND #$DF        ; Clear the 5th bit to convert to uppercase
-notLower:
-    STA ($E8),Y ; store character into the buffer
-    CMP #$0D ; is it the newline character?
-    BEQ newLineAndExit ; then finish
+    CPY #0                      ; Are we at the first character?
+    BEQ readInputCharacter      ; Then do nothing
+    DEY                         ; Otherwise, go back 1.
+    JMP outputAndReadAgain      ; Write the delete character
 
+convertToUppercase: 
+    CMP #'a'                    ; Compare with 'a'
+    BCC continueRead                ; If less than 'a', it's not a lowercase letter
+    CMP #'z'+1                  ; Compare with 'z'. Add 1 to include 'z' itself.
+    BCS continueRead                ; If greater than 'z', it's not a lowercase letter
+    AND #%11011111              ; In ASCII, you can clear the 5th bit to convert any lowercase to uppercase.
 continueRead:
-    CPY $02B3 ; check current length against max word length
+    STA ($E8),Y                 ; Store character into a buffer that BBC BASIC uses to process it.
+    CMP #$0D                    ; Is it the newline character?
+    BEQ newLineAndExit          ; ...then finish
+
+    CPY $02B3                   ; check current length against max word length
     BCS readLineInputBufferFull ; send a bell character if full
 
-    CMP $02B4 ; check minimum ASCII character
-    BCC retryWithoutIncrement ; less than minimum? retry
+    CMP $02B4                   ; check minimum ASCII character
+    BCC retryWithoutIncrement   ; less than minimum? reject and retry
 
-    CMP $02B5 ; check maximum ASCII character
-    BEQ retryWithIncrement ; equal to maximum? accept and retry
-    BCC retryWithIncrement ; less than maxmimum? accept and retry
+    CMP $02B5                   ; check maximum ASCII character
+    BCS retryWithoutIncrement   ; If it's more than the maximum, reject and retry.
+    JMP retryWithIncrement      ; Otherwise, accept and retry.
 
-    BCS retryWithoutIncrement
 newLineAndExit:
     JSR OSNEWL
-    PLP ; Restore flags
-    LDA $FF ; Get escape flag
-    ROL ; Put bit 7 into the carry bit in the status register
-    CLI
-    RTS
 Escape:
     PLP
-    SEC
-    CLI
+    LDA OSESC                   ; Get escape flag
+    ROL                         ; If the escape flag is set, also set the carry bit.
+    CLI                         ; Re-enable interrupts
     RTS
 
 ; OSWORD 1: Read System Timer
