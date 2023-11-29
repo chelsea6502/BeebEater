@@ -119,7 +119,7 @@ reset:
 
     ; --- VIA 6522 Initialisation ---
 
-    LDA #0 ; Set PORTA (for the keyboard) to input.
+    LDA #%00000000 ; Set PORTA (for the keyboard) to input.
     STA DDRA
     LDA #%11111111 ; Set PORTB (for the LCD) to output.
     STA DDRB
@@ -199,12 +199,11 @@ reset:
     JSR lcd_instruction
 
     ; Reset the part in memory that stores the time elapsed (in 'centiseconds') since boot.
-    LDA #0
-    STA TIME
-    STA TIME + 1
-    STA TIME + 2
-    STA TIME + 3
-    STA TIME + 4
+    STZ TIME
+    STZ TIME + 1
+    STZ TIME + 2
+    STZ TIME + 3
+    STZ TIME + 4
 
     ; To print characters, BBC BASIC uses the address stored in $020F-$020E. We need to load those addresses with our OSWRCH routine.
     LDA #>OSWRCHV ; Get the high byte of the write character routine.
@@ -217,8 +216,7 @@ reset:
     LDY #<bootMessage ; Store the lower 4 bits of the boot message address into the Y register.
     LDA #>bootMessage ; Store the upper 4 bits of the address into the A register.
     STA $FE ; Store the high byte of the source address.
-    LDA #0 ; 
-    STA $FD ; Make sure $FD is 0.
+    STZ $FD ; Clear the low byte in memory.
 printBootMessageLoop:
     LDA ($FD),Y ; Read the character at $FE-$FD, offset by the value of Y.
     JSR OSASCI ; Send the character to the ACIA to transmit out of the 'Tx' pin.
@@ -252,8 +250,7 @@ readCharacterBuffer:
     LDA READBUFFER ; Read what's in READBUFFER.
     BEQ readCharacterBuffer ; If it's empty, keep reading until it's full.
     PHA ; Once it has something in it, save A and clear the buffer.
-    LDA #0
-    STA READBUFFER ; Clear the character buffer
+    STZ READBUFFER ; Clear the character buffer
     PLA ; Restore A
     CLC ; Clear the carry bit. BBC BASIC uses the carry bit to track if we're in an 'escape condition' or not.
     RTS ; Return to the main routine.
@@ -344,7 +341,7 @@ OSWORD0V:
     ; byte 2: maximum line length
     ; byte 3: minimum acceptable ASCII code
     ; byte 4: maximum acceptable ASCII code
-    STA READBUFFER ; Clear the character buffer. We know A = 0 right now.
+    STZ READBUFFER ; Clear the character buffer.
     LDY #4
 osword0setup:
     ; Store max/min ASCII codes, and max line length from zero page memory to main memory
@@ -452,8 +449,7 @@ writeTimerLoop:
 
 keyboard_interrupt:
     PHA                         ; Save A
-    TXA
-    PHA                         ; Save X
+    PHX                         ; Save X
 
     ; First, check if are releasing a key, or pressing a key.
     LDA KEYBOARD_FLAGS
@@ -489,8 +485,7 @@ push_key:
     LDA #$FF                    ; If it IS the escape character, we need to signal that an escape state is active. 
     STA OSESC                   ; set the 'escape flag' address at $FF to the value #$FF.
 keyboard_interrupt_exit:
-    PLA                         ; Restore X
-    TAX
+    PLX                         ; Restore X
     PLA                         ; Restore A
     RTS                         ; Return back to the interrupt handler
 
@@ -604,8 +599,7 @@ lcd_instruction_read_cursor:
     LDA #(RW | E)
     STA PORTB
 
-    LDA #0
-    STA LCDCURSORBUFFER ; Clear the 'LCD Cursor Buffer', because we're going to be using it.
+    STZ LCDCURSORBUFFER ; Clear the 'LCD Cursor Buffer', because we're going to be using it.
 
     LDA PORTB ; read high nibble
     AND #%00000111 ; mask out the busy flag
@@ -642,8 +636,7 @@ lcd_instruction_read:
     LDA #(RS | RW | E)
     STA PORTB
 
-    LDA #0
-    STA LCDREADBUFFER ; Clear the 'LCD Read Buffer' since we are about to use it.
+    STZ LCDREADBUFFER ; Clear the 'LCD Read Buffer' since we are about to use it.
     LDA PORTB ; Read the high nibble
     AND #%00001111 ; Isolate to just 4 bits.
     ROL
@@ -731,8 +724,7 @@ lcd_print_enter_clear:
 lcd_print_enter_write_line_loop:
     LDA LCDBUFFER,X ; Load the next character from memory
     JSR print_char ; Print it to the LCD
-    LDA #0
-    STA LCDBUFFER,X ; Clear that space in memory, since we have already read it.
+    STZ LCDBUFFER,X ; Clear that space in memory, since we have already read it.
     INX
     CPX #$27 
     BCC lcd_print_enter_write_line_loop ; Keep going while we haven't hit the end of line 1 (Position 0 + $27).
@@ -879,8 +871,7 @@ end_irq:
 ; Handler for interrupts that we know were called by the BRK instruction. This means an error was reported.
 ; The BBC MOS API defines the structure of an error message. To get the message, we need to store the location of the error message in addresses $FD and $FE. 
 BRKV:
-    TXA
-    PHA                 ; Save X
+    PHX
 
     TSX                 ; Get the stack pointer value
     LDA $0103,X         ; Get the low byte of the error message location, offset by the stack pointer.
@@ -889,8 +880,7 @@ BRKV:
     LDA $0104,X         ; Get the high byte of the error message location.
     STA OSFAULT+1       ; Store the high byte into the fault handler.
 
-    PLA                 ; Restore X
-    TAX
+    PLX
     JMP ($0202)         ; Jump to BBC BASIC's error handler routine, which takes it from there. Address $0202 points to the routine.
 
 
