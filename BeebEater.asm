@@ -474,7 +474,7 @@ set_right_shift:
     JMP keyboard_interrupt_exit
     
 not_shift:
-; Convert the PS/2 scancode to an ASCII code.
+    ; Convert the PS/2 scancode to an ASCII code.
     CMP #$7F
     BCS keyboard_interrupt_exit ; Is it outside the valid scancodes? Leave early.
     TAX                         ; Otherwise, transfer the scancode to X register.
@@ -492,7 +492,6 @@ push_key:
     LDA #$FF                    ; If it IS the escape character, we need to signal that an escape state is active. 
     STA OSESC                   ; set the 'escape flag' address at $FF to the value #$FF.
 keyboard_interrupt_exit:
-    CLC
     PLX                         ; Restore X
     PLA                         ; Restore A
     RTS                         ; Return back to the interrupt handler
@@ -598,10 +597,8 @@ print_char:
     JMP print_ascii ; Otherwise, let's print it.
     
 print_char_exit:
-    ; Let's waste some time while the ACIA is still transmitting the character (see OSWRCH).
-    JSR lcd_wait
-
-    JMP exit_lcd ; This is a JMP instead of a branch because the exit_lcd routine address is too far away from here to branch.
+    JSR lcd_wait ; Let's waste some time while the ACIA is still transmitting the character (see OSWRCH).
+    JMP exit_lcd
 
 lcd_print_escape:
     LDA #%00000001 ; If the escape character was pressed, let's clear the display.
@@ -733,8 +730,7 @@ lcd_init_delay_loop:
 
 ; Subroutine called after every NMI or IRQ in hardware, or the BRK instruction in software.
 interrupt:
-    STA OSINTA ; Save A for later.
-    CLD ; Ensure we are operating in binary mode.                    
+    STA OSINTA ; Save A for later.               
     PLA ; Get the status register. IRQ/BRK puts it on the stack.
     PHA ; Keep the status register on the stack for later.
     AND #$10 ; Check if it's a BRK or an IRQ.
@@ -756,7 +752,7 @@ irq_acia:
     STA OSESC ; set the 'escape flag'.
     JMP end_irq
 irq_keyboard: ; If we've ruled out the ACIA, then let's try the keyboard.
-    JSR keyboard_interrupt ; Jump to the routine that reads PORTA and stores the character into READBUFFER.
+    JSR keyboard_interrupt ; Jump to the routine that reads PORTA and and prints the character.
     JMP end_irq ; Finish the interrupt.
 irq_via_tick: ; If we've ruled out the ACIA & keyboard, then let's assume it was the VIA timer.
     LDA T1CL ; Clear the interrupt by reading the timer.
@@ -779,16 +775,14 @@ end_irq:
 ; Handler for interrupts that we know were called by the BRK instruction. This means an error was reported.
 ; The BBC MOS API defines the structure of an error message. To get the message, we need to store the location of the error message in addresses $FD and $FE. 
 BRKV:
-    PHX
-
+    PHX                 ; Save X
     TSX                 ; Get the stack pointer value
     LDA $0103,X         ; Get the low byte of the error message location, offset by the stack pointer.
     DEC                 ; Subtract one, as BRK stores BRK+2 to the stack by default, rather than the BRK+1 that we need.
     STA OSFAULT         ; Store the low byte into the fault handler.
     LDA $0104,X         ; Get the high byte of the error message location.
     STA OSFAULT+1       ; Store the high byte into the fault handler.
-
-    PLX
+    PLX                 ; Restore X
     JMP ($0202)         ; Jump to BBC BASIC's error handler routine, which takes it from there. Address $0202 points to the routine.
 
 
@@ -853,6 +847,7 @@ keymap_shifted:
 
     .org OSBYTE
     JMP OSBYTEV
+
     .byte $60,$60,$60 ; FFF7
 
     ; 6502-specific calls, such as interrupts and resets.
