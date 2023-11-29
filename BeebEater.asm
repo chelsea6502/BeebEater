@@ -450,28 +450,41 @@ writeTimerLoop:
 keyboard_interrupt:
     PHA                         ; Save A
     PHX                         ; Save X
+    BBR1 KEYBOARD_FLAGS, handle_pressed_key ; If 'release' flag is not set, skip ahead to read_key
+handle_released_key:
+    RMB1 KEYBOARD_FLAGS         ; If we ARE releasing a key, let's clear the release flag.
+    LDA PORTA                   ; read PORTA to clear the interrupt
+clear_left_shift:
+    CMP #$12                    ; Left shift was pressed?
+    BNE clear_right_shift       ; if not, skip ahead
+    RMB2 KEYBOARD_FLAGS         ; otherwise, clear the shift flag.
+clear_right_shift:
+    CMP #$59                    ; Right shift was pressed?
+    BNE keyboard_interrupt_exit ; if not, leave.
+    RMB2 KEYBOARD_FLAGS         ; otherwise, clear the shift flag.
+    JMP keyboard_interrupt_exit ; We've processed a released key. Exit.
 
-    ; First, check if are releasing a key, or pressing a key.
-    LDA KEYBOARD_FLAGS
-    AND #RELEASE
-    BNE released_key            ; If we're releasing a key, clear the relevant keyboard flags and end early.
-read_key:
+handle_pressed_key:
     ; Process what's in PORTA, and store it into READBUFFER for reading later.
     LDA PORTA
     CMP #$F0                    ; If we've read $F0, that means the keyboard is signalling a key was released.
-    BEQ set_release_flag        ; Jump ahead to setting the 'release' flag.
-
+    BNE set_left_shift          ; If it's not a released key, skip ahead to shift checking
+    SMB1 KEYBOARD_FLAGS         ; If it IS a released key, set the release bit in KEYBOARDS_FLAGS.
+    JMP keyboard_interrupt_exit
+set_left_shift:
     CMP #$12                    ; Left shift was pressed?
-    BEQ set_shift_flag          ; Set the shift flag
+    BNE set_right_shift         ; if not, skip ahead
+    SMB2 KEYBOARD_FLAGS         ; otherwise, set the shift flag.
+    JMP keyboard_interrupt_exit
+set_right_shift:
     CMP #$59                    ; Right shift was pressed?
-    BEQ set_shift_flag          ; Set the shift flag
-
+    BNE not_shift               ; if not, skip ahead
+    SMB2 KEYBOARD_FLAGS         ; otherwise, set the shift flag.
+    JMP keyboard_interrupt_exit
+not_shift:
     ; Convert the PS/2 scancode to an ASCII code.
     TAX                         ; Transfer the scancode to X register.
-    LDA KEYBOARD_FLAGS          
-    AND #SHIFT                  ; Are we shifted?
-    BNE shifted_key             ; If yes, convert it to a capitalised ASCII set.
-unshifted_key:
+    BBS2 KEYBOARD_FLAGS, shifted_key ; Is the shift flag set? Use the shifted keymap.
     LDA keymap,X                ; Use the 'keymap' to convert the scancode. Scancode is in X, which will convert to an ASCII stored in A.
     JMP push_key                ; Move ahead to store the ASCII for processing.
 shifted_key:
@@ -489,43 +502,7 @@ keyboard_interrupt_exit:
     PLA                         ; Restore A
     RTS                         ; Return back to the interrupt handler
 
-; -- Keyboard helper routine to process a released key --
-released_key:
-    ; If we ARE releasing a key, let's clear the release flag.
-    LDA KEYBOARD_FLAGS
-    EOR #RELEASE                ; Flip the release bit. 
-    STA KEYBOARD_FLAGS
-    LDA PORTA                   ; read PORTA to clear the interrupt
-    
-    ; Clear the shift key if needed:
-    CMP #$12                    ; Releasing the left shift?
-    BEQ clear_shift_flag        ; clear the shift flag
-    CMP #$59                    ; Releasing the right shift?
-    BNE clear_shift_flag        ; clear the shift flag
-    
-    JMP keyboard_interrupt_exit ; We've processed a released key. Exit.
 
-; -- Keyboard helper routines to set/clear keyboard flags --
-; Routine to clear the 'Shift' flag when we release the Shift key.
-clear_shift_flag:
-    LDA KEYBOARD_FLAGS
-    EOR #SHIFT
-    STA KEYBOARD_FLAGS
-    JMP keyboard_interrupt_exit
-
-; Routine to set the 'Shift' flag when we press and hold the Shift key.
-set_shift_flag:
-    LDA KEYBOARD_FLAGS
-    ORA #SHIFT
-    STA KEYBOARD_FLAGS
-    JMP keyboard_interrupt_exit
-
-; Routine to set the 'Release' flag when we release any key.
-set_release_flag:
-    LDA KEYBOARD_FLAGS
-    ORA #RELEASE
-    STA KEYBOARD_FLAGS
-    JMP keyboard_interrupt_exit
 
 
 ; -- LCD Routines --
