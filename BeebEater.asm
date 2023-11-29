@@ -26,9 +26,8 @@ OSVDUWS=$0300
 ; For some, we'll set some aliases so it's easier to understand their purpose.
 READBUFFER      = OSKBD1  ; this stores the latest ASCII character that was sent into the ACIA
 KEYBOARD_FLAGS  = OSKBD2  ; This byte helps us keep track of the state of a key presses on the keyboard. See below.
-LCDREADBUFFER   = OSVDU+2 ; For storing the last printed ASCII character in the LCD.
-LCDCURSORBUFFER = OSVDU+3 ; For storing the current LCD cursor position.
 LCDBUFFER       = OSVDUWS ; For storing a line of LCD characters.
+LCDBYTEBUFFER =   OSVDU
 
 ; Keyboard flag constants:
 RELEASE = %00000001 ; Flag for if a key has just been released.
@@ -476,7 +475,9 @@ set_right_shift:
     
 not_shift:
 ; Convert the PS/2 scancode to an ASCII code.
-    TAX                         ; Transfer the scancode to X register.
+    CMP #$7F
+    BCS keyboard_interrupt_exit ; Is it outside the valid scancodes? Leave early.
+    TAX                         ; Otherwise, transfer the scancode to X register.
     BBS2 KEYBOARD_FLAGS, shifted_key ; Is the shift flag set? Use the shifted keymap.
     LDA keymap,X                ; Use the 'keymap' to convert the scancode. Scancode is in X, which will convert to an ASCII stored in A.
     JMP push_key                ; Move ahead to store the ASCII for processing.
@@ -491,6 +492,7 @@ push_key:
     LDA #$FF                    ; If it IS the escape character, we need to signal that an escape state is active. 
     STA OSESC                   ; set the 'escape flag' address at $FF to the value #$FF.
 keyboard_interrupt_exit:
+    CLC
     PLX                         ; Restore X
     PLA                         ; Restore A
     RTS                         ; Return back to the interrupt handler
@@ -528,102 +530,53 @@ lcd_instruction:
 ; Routine to keep the 6502 waiting until the LCD isn't busy anymore.
 lcd_wait:
     PHA ; Save the original value of A.
-    LDA #%11110000 ; We need to set the lower four bits of PORTB to 'input' to read the busy flag.
-    STA DDRB
 lcdbusy:
-    LDA #RW ; Checking the busy flag is like sending an instruction, but we have the 'RW' bit enabled at all times.
-    STA PORTB
-    LDA #(RW | E)
-    STA PORTB
-    LDA PORTB ; Read the high four bits. The first bit will have the busy flag.
-    PHA  ; Save the value for processing later.
-    LDA #RW ; We aren't interested in the lower four bits, but we need to read them anyway so we can finish the instruction properly.
-    STA PORTB
-    LDA #(RW | E)
-    STA PORTB
-    LDA PORTB
-    PLA ; Get back the value of the busy flag.
-    AND #%00001000 ; Isolate it to just the busy flag and nothing else.
-    BNE lcdbusy ; Is the busy flag set? Let's loop and try again.
-
-    LDA #RW ; Otherwise, let's finish the instruction and return
-    STA PORTB
-    LDA #%11111111  ; Set PORTB data direction back to the default: all output.
-    STA DDRB
+    LDA #RW
+    JSR lcd_read
+    AND #%10000000 ; check busy flag
+    BNE lcdbusy
     PLA ; Restore the original value of A
     RTS
 
-; LCD Routine to read the current position of the cursor.
-; This routine is especially useful for the 'Backspace' and 'Enter' routines.
-lcd_instruction_read_cursor:
-    JSR lcd_wait ; As always, make sure the LCD isn't bust with the previous instruction.
-    LDA #%11110000  ; LCD data is input
+lcd_read:
+    PHA
+    LDA #%11110000 ; We need to set the lower four bits of PORTB to 'input' to read the busy flag.
     STA DDRB
-    LDA #RW ; Send the instruction to read the cursor counter.
+    PLA
+    
+    PHA
     STA PORTB
-    LDA #(RW | E)
-    STA PORTB
+    LDA #E
+    TSB PORTB
 
-    STZ LCDCURSORBUFFER ; Clear the 'LCD Cursor Buffer', because we're going to be using it.
-
-    LDA PORTB ; read high nibble
-    AND #%00000111 ; mask out the busy flag
-    ASL ; ROL = 'ROtate Left' 
+    LDA PORTB ; Read the high four bits. The first bit will have the busy flag.
     ASL
     ASL
-    ASL ; Four of these will shuffle the low 4 bits to the high 4 bits.
-    STA LCDCURSORBUFFER ; Store the high 4 bits into memory.
-    LDA #RW ; Now we need to read the low 4 bits and save that too.
-    STA PORTB
-    LDA #(RW | E)
-    STA PORTB
-    LDA PORTB ; Read the low 4 bits
-    AND #%00001111 ; Make sure its only the low 4 bits
-    ORA LCDCURSORBUFFER ; Connect the high 4 bits from before with the low 4 bits now to form a complete cursor read.
-    STA LCDCURSORBUFFER ; Store it into the 'LCD Cursor Buffer' for reading later.
+    ASL
+    ASL
+    STA LCDBYTEBUFFER
 
-    LDA #RW ; Finish the instruction by clearing the 'Enable' bit.
+    PLA
+    PHA
+    STA PORTB
+    LDA #E
+    TSB PORTB
+
+    LDA PORTB
+    AND #%00001111
+
+    ORA LCDBYTEBUFFER
+    STA LCDBYTEBUFFER
+
+    PLA
     STA PORTB
 
-    LDA #%11111111  ; Set data direction back to default.
+    LDA #%11111111
     STA DDRB
-    LDA LCDCURSORBUFFER ; Leave the routine with the cursor value stored in A.
-    RTS 
 
-; LCD Routine to read the last printed ASCII character.
-; Right now this routine is only used for the 'Enter' LCD sequence.
-lcd_instruction_read:
-    JSR lcd_wait ; Make sure the LCD isn't busy
-    LDA #%11110000  ; LCD data is input
-    STA DDRB
-    LDA #(RS | RW) ; send instruction
-    STA PORTB
-    LDA #(RS | RW | E)
-    STA PORTB
-
-    LDA PORTB ; Read the high nibble
-    ASL
-    ASL
-    ASL
-    ASL ; Shuffle the bits from the lower four to the upper four.
-    STA LCDREADBUFFER ; Store it for later.
-    LDA #(RS | RW)
-    STA PORTB
-    LDA #(RS | RW | E)
-    STA PORTB
-    LDA PORTB       ; Read low nibble
-    AND #%00001111 ; Isolate to just 4 bits.
-    ORA LCDREADBUFFER ; Connect the high 4 bits from before with the low 4 bits now to form a complete ASCII character read.
-    STA LCDREADBUFFER ; Store it in memory
-
-    LDA #(RS | RW)
-    STA PORTB
-
-    LDA #%11111111  ; Set data direction back to default.
-    STA DDRB
-    LDA LCDREADBUFFER ; Leave the routine with the ASCII character value stored in A.
+    LDA LCDBYTEBUFFER
+    
     RTS
-
 
 ; LCD routine to print the character you've stored in the A register.
 ; This also handles things like backspace, escape, and enter.
@@ -646,16 +599,15 @@ print_char:
     
 print_char_exit:
     ; Let's waste some time while the ACIA is still transmitting the character (see OSWRCH).
-    LDA #%00010000 ; Move cursor right
-    JSR lcd_instruction
-    LDA #%00010100 ; Move cursor left
-    JSR lcd_instruction
+    JSR lcd_wait
 
     JMP exit_lcd ; This is a JMP instead of a branch because the exit_lcd routine address is too far away from here to branch.
+
 lcd_print_escape:
     LDA #%00000001 ; If the escape character was pressed, let's clear the display.
     JSR lcd_instruction
     JMP exit_lcd ; Leave early.
+
 lcd_clear_screen:
     LDA #%00000001 ; If the 'CLS' command was sent, let's clear the display.
     JSR lcd_instruction
@@ -663,20 +615,14 @@ lcd_clear_screen:
     JSR lcd_instruction
     JMP exit_lcd ; Leave early.
 
-; Enter handling is a little tricky: What we want to do is transfer the second line to the first line.
-; Here's a high level overview:
-; 1. Reset the cursor to the start of the second line.
-; 2. Read each character of the second line, and store it into memory.
-; 3. Clear the display. This sets the cursor to the start of the first line.
-; 4. Read each character in memory and write them one by one to the second line.
-; 5. Finish by placing the cursor back to the start of the second line.
 lcd_print_enter:
     LDA #%11000000 ; Put cursor at the start of the second line (Position 40)
     JSR lcd_instruction
-    LDX #0 ; Reset X and A.
-    LDA #0
+    LDX #0 ; Reset X
 lcd_print_enter_read_line_loop:
-    JSR lcd_instruction_read ; For each character in the LCD line, read it
+    JSR lcd_wait ; Make sure the LCD isn't busy
+    LDA #(RS | RW) ; send instruction to read the current cursor in memory.
+    JSR lcd_read
     STA LCDBUFFER,X ; Store it into memory.
     INX
     CPX #$27
@@ -684,7 +630,7 @@ lcd_print_enter_read_line_loop:
 lcd_print_enter_clear:
     LDA #%00000001 ; Clear the display
     JSR lcd_instruction
-    LDX #$0 ; Reset X in preparation for the next loop.
+    LDX #0 ; Reset X in preparation for the next loop.
 lcd_print_enter_write_line_loop:
     LDA LCDBUFFER,X ; Load the next character from memory
     JSR print_char ; Print it to the LCD
@@ -698,11 +644,6 @@ lcd_print_enter_write_line_loop:
 
     JMP exit_lcd ; We're done!
 
-; Overview of the backspace handler:
-; 1. Move the cursor back one
-; 2. Print a space ASCII character, essentially clearing the last printed character.
-; 3. Move cursor left again to the cleared character space.
-; 4. Decide if we need to shift the display view or not (More details below)
 lcd_print_backspace:
     ; Shift cursor left
     LDA #%00010000
@@ -716,16 +657,17 @@ lcd_print_backspace:
 
     ; If the cursor position is greater than $50, that means we've travelled beyond the view of the 16x2 LCD display.
     ; If this happens, we need to 'shift' the display so we can still see what we are doing.
-    JSR lcd_instruction_read_cursor ; Get the current cursor position
+    JSR lcd_wait ; Make sure the LCD isn't busy with the previous instruction.
+    LDA #RW ; Send the instruction to read the cursor counter.
+    JSR lcd_read
+    AND #%01111111 ; mask out the busy flag
+
     CMP #$4F ; 40 + 16 (-1 to cancel out the space we printed)
     BCC exit_lcd ; If the cursor is within the frame, no need to do anything.
-
-    JSR lcd_instruction_read_cursor
     CMP #$6F ; if we are at the very end of the 2nd line's buffer, we should not be shifting.
     BEQ exit_lcd
 
     ; If we are here, this means we moved backspace while out of the main view. We need to shuffle the display back.
-
     ; Shift display right to compensate for the backspace.
     LDA #%00011100
     JSR lcd_instruction
@@ -758,7 +700,11 @@ print_ascii:
     TRB PORTB
 
     ; If we've used up all of the main view (16 characters), we need to shift the display along so we can still read what we are doing.
-    JSR lcd_instruction_read_cursor ; Get the current position of the cursor.
+    JSR lcd_wait ; Make sure the LCD isn't busy with the previous instruction.
+    LDA #RW ; Send the instruction to read the cursor counter.
+    JSR lcd_read
+    AND #%01111111 ; mask out the busy flag
+
     CMP #$50 ; 40 + 16 (-1 to cancel out the space we printed)
     BCC exit_lcd ; If we're inside the frame, no need to do anything.
 
@@ -847,7 +793,7 @@ BRKV:
 
 
     ; Define the mapping from PS/2 Scancode to ASCII
-   .org $fd00
+   .org $fe00
 keymap:
     .byte "????????????? `?" ; 00-0F
     .byte "?????q1???zsaw2?" ; 10-1F
@@ -857,14 +803,6 @@ keymap:
     .byte "??'?[=????",$0d,"]?\??" ; 50-5F
     .byte "??????",$08,"??1?47???" ; 60-6F
     .byte "0.2568",$1b,"??+3-*9??" ; 70-7F
-    .byte "????????????????" ; 80-8F
-    .byte "????????????????" ; 90-9F
-    .byte "????????????????" ; A0-AF
-    .byte "????????????????" ; B0-BF
-    .byte "????????????????" ; C0-CF
-    .byte "????????????????" ; D0-DF
-    .byte "????????????????" ; E0-EF
-    .byte "????????????????" ; F0-FF
 keymap_shifted:
     .byte "????????????? ~?" ; 00-0F
     .byte "?????Q!???ZSAW@?" ; 10-1F
@@ -874,14 +812,6 @@ keymap_shifted:
     .byte '??"?{+?????}?|??' ; 50-5F
     .byte "?????????1?47???" ; 60-6F
     .byte "0.2568???+3-*9??" ; 70-7F
-    .byte "????????????????" ; 80-8F
-    .byte "????????????????" ; 90-9F
-    .byte "????????????????" ; A0-AF
-    .byte "????????????????" ; B0-BF
-    .byte "????????????????" ; C0-CF
-    .byte "????????????????" ; D0-DF
-    .byte "????????????????" ; E0-EF
-    .byte "????????????????" ; F0-FF
 
 
     ; BBC MOS system calls. Code call these by jumping to their place in memory.
