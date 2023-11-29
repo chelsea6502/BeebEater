@@ -159,19 +159,15 @@ reset:
     ; We can't use 'lcd_instruction' right now because the LCD 'busy' flag isn't available yet.
     LDA #%00000011
     STA PORTB
-    ORA #E ; Send the same thing, but with the 'enable' bit set. This is how we send an instruction to the LCD.
-    STA PORTB
-    EOR #E ; Send the same thing, but with the 'enable' bit cleared.
-    STA PORTB
+
+    LDA #E
+    TSB PORTB ; Set the 'Enable' bit on PORTB
+    TRB PORTB ; Clear the 'Enable' bit on PORTB
     JSR lcd_init_delay  ; Wait at least 4.1 milliseconds
 
     ; Step 3: Send the same instruction again to the LCD.
-    LDA #%00000011
-    STA PORTB
-    ORA #E ; Set the 'enable' bit
-    STA PORTB
-    EOR #E ; Clear the 'enable' bit
-    STA PORTB
+    TSB PORTB
+    TRB PORTB
     JSR lcd_init_delay ; Wait at least 100 microseconds (0.1 milliseconds)
 
     ; Step 4: Send a third and final '00000011'
@@ -221,7 +217,7 @@ printBootMessageLoop:
     LDA ($FD),Y ; Read the character at $FE-$FD, offset by the value of Y.
     JSR OSASCI ; Send the character to the ACIA to transmit out of the 'Tx' pin.
     INY ; Step to the next character.
-    CMP #$0 ; If we read a '0', that's when we stop reading the string.
+    CMP #0 ; If we read a '0', that's when we stop reading the string.
     BNE printBootMessageLoop ;  If A is not 0, read the next character.
 
     ; -- Enter BBC BASIC --
@@ -239,8 +235,7 @@ printBootMessageLoop:
 ; We use this to receive input from your keyboard to the the caller.
 ; It also checks if the escape key has been pressed. If it has, it lets the caller know so it needs to leave whatever it's running.
 OSRDCHV:
-    BIT OSESC ; Is the escape flag set?
-    BPL readCharacterBuffer ; If not, jump ahead to read the character.
+    BBR7 OSESC, readCharacterBuffer ; Is the escape flag set? If not, jump ahead to read the character.
     SEC ; If the escape flag IS set, set the carry bit and exit early without reading the character.
     RTS
 readCharacterBuffer:
@@ -249,9 +244,7 @@ readCharacterBuffer:
     ; A full READBUFFER essentially means that there's a character that's been received by the ACIA that hasn't been read yet.
     LDA READBUFFER ; Read what's in READBUFFER.
     BEQ readCharacterBuffer ; If it's empty, keep reading until it's full.
-    PHA ; Once it has something in it, save A and clear the buffer.
-    STZ READBUFFER ; Clear the character buffer
-    PLA ; Restore A
+    STZ READBUFFER ; Is it full? Keep what's in A, and clear the character buffer
     CLC ; Clear the carry bit. BBC BASIC uses the carry bit to track if we're in an 'escape condition' or not.
     RTS ; Return to the main routine.
 
@@ -289,12 +282,11 @@ OSBYTEV:
 
 OSBYTE7E: ; Routine that 'acknowledges' the escape key has been pressed.
     LDX #0 ; Reset X, in case X is currently set to #$FF aleady.
-    BIT OSESC   ; check for the ESCAPE flag. 'BIT' just checks bit 7 and 6.
-    BPL clearEscape  ; if there's no ESCAPE flag, then just clear the ESCAPE condition.
+    BBR7 OSESC,clearEscape  ; if there's no ESCAPE flag, then just clear the ESCAPE condition.
     LDX #$FF   ; If escape HAS been pressed, set X=$FF to indicate ESCAPE has been acknowledged.
 clearEscape:
     CLC    ; Clear the carry bit
-    ROR OSESC ; Clear bit 7 of the ESCAPE flag.
+    RMB7 OSESC ; Clear bit 7 of the ESCAPE flag.
     RTS 
 
 OSBYTE84: ; Routine to return the highest address of free RAM space.
@@ -462,7 +454,7 @@ clear_right_shift:
     CMP #$59                    ; Right shift was pressed?
     BNE keyboard_interrupt_exit ; if not, leave.
     RMB2 KEYBOARD_FLAGS         ; otherwise, clear the shift flag.
-    JMP keyboard_interrupt_exit ; We've processed a released key. Exit.
+    JMP keyboard_interrupt_exit ; Finished processing all released keys. Exit.
 
 handle_pressed_key:
     ; Process what's in PORTA, and store it into READBUFFER for reading later.
@@ -481,8 +473,9 @@ set_right_shift:
     BNE not_shift               ; if not, skip ahead
     SMB2 KEYBOARD_FLAGS         ; otherwise, set the shift flag.
     JMP keyboard_interrupt_exit
+    
 not_shift:
-    ; Convert the PS/2 scancode to an ASCII code.
+; Convert the PS/2 scancode to an ASCII code.
     TAX                         ; Transfer the scancode to X register.
     BBS2 KEYBOARD_FLAGS, shifted_key ; Is the shift flag set? Use the shifted keymap.
     LDA keymap,X                ; Use the 'keymap' to convert the scancode. Scancode is in X, which will convert to an ASCII stored in A.
@@ -501,9 +494,6 @@ keyboard_interrupt_exit:
     PLX                         ; Restore X
     PLA                         ; Restore A
     RTS                         ; Return back to the interrupt handler
-
-
-
 
 ; -- LCD Routines --
 
@@ -524,17 +514,15 @@ lcd_instruction:
     LSR
     LSR ; Four of these instructions will shuffle the high 4 bits down the low 4 bits.
     STA PORTB ; Send it to the LCD
-    ORA #E ; Set E bit to send instruction
-    STA PORTB
-    EOR #E ; Clear E bit
-    STA PORTB
+    LDA #E ; Cycle the enable bit on, then off.
+    TSB PORTB
+    TRB PORTB
     PLA ; Get back the original A
     AND #%00001111 ; Mask the high 4 bits we already sent
     STA PORTB ; Send the low four bits to the LCD.
-    ORA #E ; Set E bit to send instruction
-    STA PORTB
-    EOR #E ; Clear E bit
-    STA PORTB
+    LDA #E ; Cycle the enable bit on, then off.
+    TSB PORTB
+    TRB PORTB
     RTS ; Return to where we were before.
 
 ; Routine to keep the 6502 waiting until the LCD isn't busy anymore.
@@ -580,10 +568,10 @@ lcd_instruction_read_cursor:
 
     LDA PORTB ; read high nibble
     AND #%00000111 ; mask out the busy flag
-    ROL ; ROL = 'ROtate Left' 
-    ROL
-    ROL
-    ROL ; Four of these will shuffle the low 4 bits to the high 4 bits.
+    ASL ; ROL = 'ROtate Left' 
+    ASL
+    ASL
+    ASL ; Four of these will shuffle the low 4 bits to the high 4 bits.
     STA LCDCURSORBUFFER ; Store the high 4 bits into memory.
     LDA #RW ; Now we need to read the low 4 bits and save that too.
     STA PORTB
@@ -613,13 +601,11 @@ lcd_instruction_read:
     LDA #(RS | RW | E)
     STA PORTB
 
-    STZ LCDREADBUFFER ; Clear the 'LCD Read Buffer' since we are about to use it.
     LDA PORTB ; Read the high nibble
-    AND #%00001111 ; Isolate to just 4 bits.
-    ROL
-    ROL
-    ROL
-    ROL ; Shuffle the bits from the lower four to the upper four.
+    ASL
+    ASL
+    ASL
+    ASL ; Shuffle the bits from the lower four to the upper four.
     STA LCDREADBUFFER ; Store it for later.
     LDA #(RS | RW)
     STA PORTB
@@ -637,6 +623,7 @@ lcd_instruction_read:
     STA DDRB
     LDA LCDREADBUFFER ; Leave the routine with the ASCII character value stored in A.
     RTS
+
 
 ; LCD routine to print the character you've stored in the A register.
 ; This also handles things like backspace, escape, and enter.
@@ -686,7 +673,7 @@ lcd_clear_screen:
 lcd_print_enter:
     LDA #%11000000 ; Put cursor at the start of the second line (Position 40)
     JSR lcd_instruction
-    LDX #$0 ; Reset X and A for later use.
+    LDX #0 ; Reset X and A.
     LDA #0
 lcd_print_enter_read_line_loop:
     JSR lcd_instruction_read ; For each character in the LCD line, read it
@@ -759,18 +746,16 @@ print_ascii:
     LSR ; Send the high 4 bits
     ORA #RS ; Set 'RS' to signal we want to print a character.
     STA PORTB
-    ORA #E ; Set E bit to send instruction
-    STA PORTB
-    EOR #E ; Clear E bit
-    STA PORTB
+    LDA #E ; Cycle the 'enable' bit from on to off.
+    TSB PORTB
+    TRB PORTB
     PLA ; Restore A to send the low four bits.
     AND #%00001111 ; Send low 4 bits
-    ORA #RS ; Set RS
+    ORA #RS ; Set 'RS' to signal we want to print a character.
     STA PORTB
-    ORA #E ; Set E bit to send instruction
-    STA PORTB
-    EOR #E ; Clear E bit, but still preserving RS.
-    STA PORTB
+    LDA #E
+    TSB PORTB
+    TRB PORTB
 
     ; If we've used up all of the main view (16 characters), we need to shift the display along so we can still read what we are doing.
     JSR lcd_instruction_read_cursor ; Get the current position of the cursor.
