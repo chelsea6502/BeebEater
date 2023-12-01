@@ -145,10 +145,6 @@ reset:
     LDA #$C2
     STA IER
 
-    ; Initialise the 'Interrupt Enable Register (IER)'.
-    LDA #%11000000 ; Trigger an IRQ interrupt every time Timer 1 runs out.
-    STA IER
-
     ; --- LCD Reset Sequence ---
     ; We will now go through the LCD reset sequence, as instructed in page 47 of the Hitachi 44780U LCD controller datasheet.
 
@@ -254,14 +250,11 @@ OSRDCHV:
     LDA #0
     STA READBUFFER ; Clear the character buffer
     PLA ; Restore A
-    CMP #$1B ; First, let's check if it's an escape key.
-    BEQ isEscape ; Is it an escape key? Let's skip ahead to the 'escapeCondition' routine.
 notEscape:
     CLC ; If it's not an escape, let's clear the carry bit. BBC BASIC uses the carry bit to track if we're in an 'escape condition' or not.
     RTS ; Return to the main routine
 isEscape:
     SEC ; If it IS an escape, let's set the carry bit.
-    LDA #$1B ; Load the 'ESC' ASCII character into A.
     RTS
 
 ; OSWRCH: 'OS Write Character'
@@ -339,9 +332,12 @@ OSWORDV:
     CMP #$01        ; Is it the 'Read Clock' system call?
     BEQ OSWORD1V    ; Jump to it if yes
     CMP #$02        ; Is it the 'Write Clock' system call?
-    BEQ OSWORD2V    ; Jump to it if yes
+    BEQ OSWORD2V_JUMP    ; Jump to it if yes
     PLP             ; Restore caller's IRQs
     RTS             ; Otherwise, return with no change.
+
+OSWORD2V_JUMP:
+    JMP OSWORD2V ; 'OSWORD2V' is too far away to branch, so we have to place a JMP here.
 
 OSWORD0V:
     STA READBUFFER ; Write a '0' to the character buffer, in case there's an escape character currently in there. Kind of a hacky solution, but it works!
@@ -421,10 +417,11 @@ continueRead:
     BCS retryWithoutIncrement
 newLineAndExit:
     JSR OSNEWL
+    LDA OSAREG
+    LDX OSXREG
+    LDY OSYREG
     PLP ; Restore flags
-    LDA $FF ; Get escape flag
-    ROL ; Put bit 7 into the carry bit in the status register
-    CLI
+    CLC
     RTS
 Escape:
     PLP
