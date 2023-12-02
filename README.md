@@ -62,8 +62,9 @@ BeebEater assumes you have the [standard Ben Eater 6502 build](https://eater.net
 BeebEater follows the same schematic as the Ben Eater one shown above, but with two minor additions: 
  1. Connect the PS/2 keyboard to the PA0-PA7 pins (Pins 2-9) on the VIA, as per [Ben's keyboard video.](https://www.youtube.com/watch?v=w1SB9Ry8_Jg)
  2. Connect the PS/2 keyboard's rising edge interrrupt signal to the CA1 pin on the VIA, as per [Ben's keyboard video.](https://www.youtube.com/watch?v=w1SB9Ry8_Jg)
- 3. On the ACIA, tie Pin 16 (DCDB) and 17 (DSRB) to ground. Otherwise, these pins would be 'floating', and cause IRQ triggers when it's not needed.
- 4. **VERY IMPORTANT:** Don't have the LCD and/or Keyboard connected? Send any unused/unconnected PA and PB pins from the VIA (Pins 2-17 on the W65C22) directly to ground. Otherwise, BeebEater will get confused about the 'floating' state pins and won't run.
+ 3. On the VIA, connect the unused pin 17 (PB7) to ground. Otherwise, the pin would be in a 'floating' state, and would corrupt data between the VIA and the LCD.
+ 4. On the ACIA, tie Pin 16 (DCDB) and 17 (DSRB) to ground. Otherwise, these pins would be 'floating', and cause IRQ triggers when it's not needed.
+ 5. **VERY IMPORTANT:** Don't have the LCD and/or Keyboard connected? Send any unused/unconnected PA and PB pins from the VIA (Pins 2-17 on the W65C22) directly to ground. Otherwise, BeebEater will get confused about the 'floating' state pins and won't run.
 
 ## Serial monitor
 I recommend [**CoolTerm**](https://freeware.the-meiers.org) as your serial monitor application. It’s free, open source, cross-platform, and natively handles backspace/delete. Open `BeebEater_CoolTerm.cts` inside CoolTerm, you’ll have all the settings you need preloaded.
