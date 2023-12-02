@@ -269,7 +269,7 @@ OSWRCHV:
     ; Because of the WDC 6551 ACIA transmit bug, We need around 86 microseconds between now and the end of RTS (assuming 115200 baud & 1mhz clock).
     ; Luckily, the LCD's print_char routine will always take enough time to cover this.
     PHP ; Save caller's interupt state
-    SEI ; Disable interrupts while we are printing a character.
+    CLI ; Enable interrupts while we are printing a character.
     JSR print_char ; Also print the same character to the LCD.
     PLP ; Restore caller's interupt state.
     RTS
