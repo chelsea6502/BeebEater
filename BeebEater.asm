@@ -144,10 +144,6 @@ reset:
     LDA #$C2
     STA IER
 
-    ; Initialise the 'Interrupt Enable Register (IER)'.
-    LDA #%11000000 ; Trigger an IRQ interrupt every time Timer 1 runs out.
-    STA IER
-
     ; --- LCD Reset Sequence ---
     ; We will now go through the LCD reset sequence, as instructed in page 47 of the Hitachi 44780U LCD controller datasheet.
 
@@ -199,6 +195,9 @@ reset:
     STZ TIME + 2
     STZ TIME + 3
     STZ TIME + 4
+
+    ; Initialise KEYBOARD_FLAGS to 0
+    STZ KEYBOARD_FLAGS
 
     ; To print characters, BBC BASIC uses the address stored in $020F-$020E. We need to load those addresses with our OSWRCH routine.
     LDA #>OSWRCHV ; Get the high byte of the write character routine.
@@ -256,7 +255,7 @@ OSWRCHV:
     ; Because of the WDC 6551 ACIA transmit bug, We need around 86 microseconds between now and the end of RTS (assuming 115200 baud & 1mhz clock).
     ; Luckily, the LCD's print_char routine will always take enough time to cover this.
     PHP ; Save caller's interupt state
-    SEI ; Disable interrupts while we are printing a character.
+    CLI ; Enable interrupts while we are printing a character.
     JSR print_char ; Also print the same character to the LCD.
     PLP ; Restore caller's interupt state.
     RTS
@@ -326,6 +325,8 @@ OSWORDV:
     RTS             ; Otherwise, return with no change.
 
 OSWORD0V:
+    STA READBUFFER ; Write a '0' to the character buffer, in case there's an escape character currently in there. Kind of a hacky solution, but it works!
+
     ; An OSWORD 0 control block has a couple of bytes of metadata to help us:
     ; byte 0: address of input buffer for result (low)
     ; byte 1: address of input buffer for result (high)
@@ -399,6 +400,12 @@ continueRead:
 
 newLineAndExit:
     JSR OSNEWL
+    LDA OSAREG
+    LDX OSXREG
+    LDY OSYREG
+    PLP ; Restore flags
+    CLC
+    RTS
 Escape:
     PLP
     LDA OSESC                   ; Get escape flag
