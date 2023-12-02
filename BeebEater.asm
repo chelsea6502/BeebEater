@@ -202,6 +202,9 @@ reset:
     STA TIME + 3
     STA TIME + 4
 
+    ; Initialise KEYBOARD_FLAGS to 0
+    STA KEYBOARD_FLAGS
+
     ; To print characters, BBC BASIC uses the address stored in $020F-$020E. We need to load those addresses with our OSWRCH routine.
     LDA #>OSWRCHV ; Get the high byte of the write character routine.
     STA $020F ; Store it in $020F.
@@ -507,7 +510,7 @@ read_key:
     BEQ key_release ; Jump ahead to setting the 'release' flag.
 
     CMP #$12 ; Left shift was pressed?
-    BEQ shift_down ; Set the shift flag [TODO: investigate why my build starts with the shift flag set by default]
+    BEQ shift_down ; Set the shift flag
     CMP #$59 ; Right shift was pressed?
     BEQ shift_down ; Set the  shift flag
 
