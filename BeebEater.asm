@@ -729,7 +729,7 @@ exit_lcd:
 
 ; -- LCD Delay routines ---
 
-; Set A and Y such that microseconds = 9*(256*A+Y)+8. This is assuming a 1mhz clock
+; Set A and Y such that microseconds = 9*(256*A+Y)+20. This is assuming a 1mhz clock.
 delay_15ms:
     LDA #6
     LDY #129
