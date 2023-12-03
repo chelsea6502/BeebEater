@@ -149,7 +149,7 @@ reset:
     ; We will now go through the LCD reset sequence, as instructed in page 47 of the Hitachi 44780U LCD controller datasheet.
 
     ; Step 1: Wait 15ms after LCD gets power.
-    JSR lcd_init_delay ; This routine waits about 16 milliseconds when at a 1mhz clock.
+    JSR delay_15ms ; This routine waits about 15 milliseconds when at a 1mhz clock.
     
     ; Step 2: Send the '00000011' instruction to the LCD. 
     ; We can't use 'lcd_instruction' right now because the LCD 'busy' flag isn't available yet.
@@ -159,12 +159,12 @@ reset:
     LDA #E
     TSB PORTB ; Set the 'Enable' bit on PORTB
     TRB PORTB ; Clear the 'Enable' bit on PORTB
-    JSR lcd_init_delay  ; Wait at least 4.1 milliseconds
+    JSR delay_4100us  ; Wait at least 4.1 milliseconds
 
     ; Step 3: Send the same instruction again to the LCD.
     TSB PORTB
     TRB PORTB
-    JSR lcd_init_delay ; Wait at least 100 microseconds (0.1 milliseconds)
+    JSR delay_100us ; Wait at least 100 microseconds (0.1 milliseconds)
 
     ; Step 4: Send a third and final '00000011'
     ; At this point, we can now use 'lcd_instruction' to help us send an instruction.
@@ -727,15 +727,29 @@ exit_lcd:
     CLC ; CLC = "CLear Carry"
     RTS ; Return to where we were before.
 
+; -- LCD Delay routines ---
 
-lcd_init_delay:
-    LDX #$0F        ; Load X register with the high byte of 4000 (4000 in hexadecimal is 0x0FA0)
-    LDY #$A0        ; Load Y register with the low byte of 4000
-lcd_init_delay_loop:
-    DEY             ; Decrement Y
-    BNE lcd_init_delay_loop  ; Branch if not zero (Y != 0) to delay_loop
-    DEX             ; Decrement X
-    BNE lcd_init_delay_loop  ; Branch if not zero (X != 0) to delay_loop
+; Set A and Y such that microseconds = 9*(256*A+Y)+20. This is assuming a 1mhz clock.
+delay_15ms:
+    LDA #6
+    LDY #129
+    JMP delay_loop
+
+delay_4100us:
+    LDA #1
+    LDY #198
+    JMP delay_loop
+
+delay_100us:
+    LDA #0
+    LDY #9
+    JMP delay_loop
+
+delay_loop:   
+    CPY  #1
+    DEY
+    SBC  #0
+    BCS  delay_loop
     RTS
 
 ; -- Interrupt Handling --
