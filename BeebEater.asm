@@ -325,7 +325,7 @@ OSWORDV:
     PLP             ; Restore caller's IRQs
     RTS             ; Otherwise, return with no change.
 
-OSWORD2V_JUMP: JMP OSWORD2V
+OSWORD2V_JUMP: JMP OSWORD2V ; OSWORD2V is too far away to directly jump, so we have to make a JMP here instead.
 
 OSWORD0V:
     ; An OSWORD 0 control block has a couple of bytes of metadata to help us:
