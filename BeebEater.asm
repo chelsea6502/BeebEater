@@ -27,7 +27,8 @@ OSVDUWS=$0300
 READBUFFER      = OSKBD1  ; this stores the latest ASCII character that was sent into the ACIA
 KEYBOARD_FLAGS  = OSKBD2  ; This byte helps us keep track of the state of a key presses on the keyboard. See below.
 LCDBUFFER       = OSVDUWS ; For storing a line of LCD characters.
-LCDBYTEBUFFER =   OSVDU
+LCDREADBUFFER =   OSVDU
+LCDWRITEBUFFER = OSVDU+1
 
 ; Keyboard flag constants:
 RELEASE = %00000001 ; Flag for if a key has just been released.
@@ -320,13 +321,13 @@ OSWORDV:
     CMP #$01        ; Is it the 'Read Clock' system call?
     BEQ OSWORD1V    ; Jump to it if yes
     CMP #$02        ; Is it the 'Write Clock' system call?
-    BEQ OSWORD2V    ; Jump to it if yes
+    BEQ OSWORD2V_JUMP    ; Jump to it if yes
     PLP             ; Restore caller's IRQs
     RTS             ; Otherwise, return with no change.
 
-OSWORD0V:
-    STA READBUFFER ; Write a '0' to the character buffer, in case there's an escape character currently in there. Kind of a hacky solution, but it works!
+OSWORD2V_JUMP: JMP OSWORD2V
 
+OSWORD0V:
     ; An OSWORD 0 control block has a couple of bytes of metadata to help us:
     ; byte 0: address of input buffer for result (low)
     ; byte 1: address of input buffer for result (high)
@@ -516,21 +517,9 @@ keyboard_interrupt_exit:
 ; You can check this by checking the 'busy flag' of the LCD. See the 'lcd_wait' routine for details.
 lcd_instruction:
     JSR lcd_wait ; Wait until the LCD is ready for another instruction.
-    PHA ; Save the original value of A, because we're going to be messing with it next
-    LSR ; LSR = 'Logical Shift Right'. 
-    LSR
-    LSR
-    LSR ; Four of these instructions will shuffle the high 4 bits down the low 4 bits.
-    STA PORTB ; Send it to the LCD
-    LDA #E ; Cycle the enable bit on, then off.
-    TSB PORTB
-    TRB PORTB
-    PLA ; Get back the original A
-    AND #%00001111 ; Mask the high 4 bits we already sent
-    STA PORTB ; Send the low four bits to the LCD.
-    LDA #E ; Cycle the enable bit on, then off.
-    TSB PORTB
-    TRB PORTB
+    STA LCDWRITEBUFFER
+    LDA #0
+    JSR LCD_WRITE
     RTS ; Return to where we were before.
 
 ; Routine to keep the 6502 waiting until the LCD isn't busy anymore.
@@ -560,7 +549,7 @@ lcd_read:
     ASL
     ASL
     ASL
-    STA LCDBYTEBUFFER
+    STA LCDREADBUFFER
 
     PLA
     PHA
@@ -571,8 +560,8 @@ lcd_read:
     LDA PORTB
     AND #%00001111
 
-    ORA LCDBYTEBUFFER
-    STA LCDBYTEBUFFER
+    ORA LCDREADBUFFER
+    STA LCDREADBUFFER
 
     PLA
     STA PORTB
@@ -580,8 +569,38 @@ lcd_read:
     LDA #%11111111
     STA DDRB
 
-    LDA LCDBYTEBUFFER
+    LDA LCDREADBUFFER
     
+    RTS
+
+LCD_WRITE:
+    JSR lcd_wait
+
+    PHA ; store the LCD flags twice
+    PHA
+    ; store the high and low nibs in zeropage
+    LDA LCDWRITEBUFFER
+    LSR LCDWRITEBUFFER 
+    LSR LCDWRITEBUFFER
+    LSR LCDWRITEBUFFER
+    LSR LCDWRITEBUFFER ; high nib
+    AND #$0F
+    STA LCDWRITEBUFFER+1 ; low nib
+
+    PLA ; get LCD flag
+    ORA LCDWRITEBUFFER
+    STA PORTB
+    LDA #E
+    TSB PORTB
+    TRB PORTB
+
+    PLA ; get LCD flag
+    ORA LCDWRITEBUFFER+1
+    STA PORTB
+    LDA #E
+    TSB PORTB
+    TRB PORTB
+
     RTS
 
 ; LCD routine to print the character you've stored in the A register.
@@ -685,23 +704,9 @@ lcd_print_backspace:
 
 print_ascii:
     JSR lcd_wait
-    PHA ; Save the original value of A
-    LSR ; Shuffle the high 4 bits down to the low 4 bits.
-    LSR
-    LSR
-    LSR ; Send the high 4 bits
-    ORA #RS ; Set 'RS' to signal we want to print a character.
-    STA PORTB
-    LDA #E ; Cycle the 'enable' bit from on to off.
-    TSB PORTB
-    TRB PORTB
-    PLA ; Restore A to send the low four bits.
-    AND #%00001111 ; Send low 4 bits
-    ORA #RS ; Set 'RS' to signal we want to print a character.
-    STA PORTB
-    LDA #E
-    TSB PORTB
-    TRB PORTB
+    STA LCDWRITEBUFFER
+    LDA #RS
+    JSR LCD_WRITE
 
     ; If we've used up all of the main view (16 characters), we need to shift the display along so we can still read what we are doing.
     JSR lcd_wait ; Make sure the LCD isn't busy with the previous instruction.
@@ -818,21 +823,10 @@ keymap_shifted:
     ; BBC MOS system calls. Code call these by jumping to their place in memory.
     ; Most of them jump to a 'vector' that properly handles the system call.
     
-    .org $FFB6
-    .byte 0,0,0 ; no vector table
-    .byte $60,$60,$60 ; FFB9
-    .byte $60,$60,$60 ; FFBC
-    .byte $60,$60,$60 ; FFBF
-    .byte $60,$60,$60 ; FFC2
-    .byte $60,$60,$60 ; FFC5
-    .byte $60,$60,$60 ; FFC8
-    .byte $60,$60,$60 ; FFCB
-    .byte $60,$60,$60 ; FFCE
-    .byte $60,$60,$60 ; FFD1
-    .byte $60,$60,$60 ; FFD4
-    .byte $60,$60,$60 ; FFD7
-    .byte $60,$60,$60 ; FFDA
-    .byte $60,$60,$60 ; FFDD
+    .org $FFB9
+    ; Fill the unused system calls from $FFB9 to $FFDD with the 'RTS' instruction, so we can safely return in case they are called.
+    ; If you want to use BBC BASIC system calls that use these addresses, you'll have to break this '.fill' apart to make space for it.
+    .fill 39, $60
 
     JMP OSRDCHV ; FFE0
     .org OSASCI ; FFE3
@@ -855,7 +849,7 @@ keymap_shifted:
     .org OSBYTE
     JMP OSBYTEV
 
-    .byte $60,$60,$60 ; FFF7
+    .byte $60,$60,$60 ; 'OSCLI' is unused, so we'll write 'RTS' to it.
 
     ; 6502-specific calls, such as interrupts and resets.
     .org NMI
