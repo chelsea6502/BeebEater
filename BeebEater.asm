@@ -1,4 +1,4 @@
-; BeebEater v1.0 - BBC BASIC port for the Ben Eater 6502.
+; BeebEater v0.9.0 - BBC BASIC port for the Ben Eater 6502.
 ; by Chelsea Wilkinson (chelsea6502)
 ; https://github.com/chelsea6502/BeebEater
 
