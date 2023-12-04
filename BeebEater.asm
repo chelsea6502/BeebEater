@@ -309,7 +309,7 @@ OSBYTE83: ; Routine to return the lowest address of free RAM space.
     ; OSWORD 2: "Write system clock" - Set the number of 'centiseconds' since boot to a certain value. This is called by "TIME=[value]" in BASIC.
 OSWORDV:
     PHP  ; Preserve caller's IRQ state.
-	SEI	 ; Disable interrupts for now, so we don't change a character mid-print.
+	CLI	 ; Enable Interrupts
 	
     ; Store A, X, and Y registers in MOS API workspace.
 	STA	OSAREG
