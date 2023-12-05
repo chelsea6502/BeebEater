@@ -764,7 +764,8 @@ interrupt:
 irqv: ; Otherwise, it's an IRQ. Let's check what caused the interrupt, starting with the ACIA.
     LDA ACIA_STATUS
     AND #$88 ; Check the ACIA status register to find out if the ACIA is asking to read a character.
-    BNE irq_acia ; If yes, jump to the acia handler.
+    CMP #$88 ; Check if it's specifically because the recieve register is full
+    BEQ irq_acia ; If yes, jump to the acia handler.
     LDA IFR ; Check the "Interrupt Flag Register" to make sure it was the keyboard that caused the interrupt.
     AND #%00000010 ; We have to check bit 2.
     BNE irq_keyboard 
