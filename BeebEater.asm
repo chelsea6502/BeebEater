@@ -248,6 +248,14 @@ readCharacterBuffer:
     JSR bufferDifference
     BEQ readCharacterBuffer
     JSR readFromBuffer
+    PHA
+    JSR bufferDifference
+    CMP  #$E0        ; Is it at least 224?
+    BCS  buffer_full    ; If so, leave the sending end turned off.
+    LDA  #%00001001  ; Else, tell the sending end that it's ok to start
+    STA  ACIA_CMD   ; sending data again, by setting its CTS line true.
+buffer_full:
+    PLA
     CLC ; Clear the carry bit. BBC BASIC uses the carry bit to track if we're in an 'escape condition' or not.
     RTS ; Return to the main routine.
 
@@ -820,7 +828,16 @@ irqv: ; Otherwise, it's an IRQ. Let's check what caused the interrupt, starting 
     BEQ irq_via_tick ; If we've ruled out the ACIA and Keyboard, let's assume it was the timer.
 irq_acia:
     LDA ACIA_DATA ; Read the ACIA. Because reading the ACIA clears the data, this is the only place allowed to read it directly!
+    STA READBUFFER
     JSR pushToBuffer ; Store it in memory for OSWRCHV to use.
+    JSR  bufferDifference     ; Now see how full the buffer is.
+    CMP  #$F0       ; If it has less than 240 bytes unread,
+    BCC  irqv         ; just exit the ISR here.
+    LDA  #1          ; Else, tell the other end to stop sending data before
+    STA  ACIA_CMD   ; the buffer overflows, by storing 1 in the ACIA's command register.  (See text.)
+    JMP irqv
+irq_escape_check:
+    LDA READBUFFER
     CMP #$1B ; Check if an escape key was pressed
     BNE end_irq ; If it's not an escape key, we've done everything we need. Skip to the end.
     LDA #$FF ; If an escape key was pressed, let's set the escape flag.
