@@ -205,17 +205,7 @@ reset:
     ; Initialise KEYBOARD_FLAGS to 0
     STZ KEYBOARD_FLAGS
 
-    LDX #0
-clearBufferLoop:
-    STZ INPUTBUFFER, X
-    INX
-    BNE clearBufferLoop 
-
-    STZ INPUTBUFFERREAD
-    STZ INPUTBUFFERWRITE
-
-    STZ INPUTBUFFEREMPTY
-
+    JSR flushBuffer
 
     ; To print characters, BBC BASIC uses the address stored in $020F-$020E. We need to load those addresses with our OSWRCH routine.
     LDA #>OSWRCHV ; Get the high byte of the write character routine.
@@ -301,6 +291,20 @@ bufferDifference:
     LDA INPUTBUFFERWRITE ; Find difference between number of bytes written
     SEC ; and how many read.
     SBC INPUTBUFFERREAD ; Ends with A showing the number of bytes left to read.
+    RTS
+
+flushBuffer:
+    LDX #0
+clearBufferLoop:
+    STZ INPUTBUFFER, X
+    INX
+    BNE clearBufferLoop 
+
+    STZ INPUTBUFFERREAD
+    STZ INPUTBUFFERWRITE
+
+    STZ INPUTBUFFEREMPTY
+
     RTS
 
 ; OSBYTE: 'OS Byte'
@@ -451,6 +455,7 @@ newLineAndExit:
     CLC
     RTS
 Escape:
+    JSR flushBuffer
     PLP
     LDA OSESC                   ; Get escape flag
     ROL                         ; If the escape flag is set, also set the carry bit.
