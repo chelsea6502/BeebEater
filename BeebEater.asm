@@ -30,6 +30,11 @@ LCDBUFFER       = OSVDUWS ; For storing a line of LCD characters.
 LCDREADBUFFER =   OSVDU
 LCDWRITEBUFFER = OSVDU+1
 
+INPUTBUFFER = $0800
+INPUTBUFFEREMPTY = $02CF
+INPUTBUFFERREAD = $02D8
+INPUTBUFFERWRITE = $02E1
+
 ; Keyboard flag constants:
 RELEASE = %00000001 ; Flag for if a key has just been released.
 SHIFT   = %00000010 ; Flag for if we are holding down the shift key.
@@ -200,6 +205,25 @@ reset:
     ; Initialise KEYBOARD_FLAGS to 0
     STZ KEYBOARD_FLAGS
 
+    LDX #0
+clearBufferLoop:
+    STZ INPUTBUFFER, X
+    INX
+    BNE clearBufferLoop 
+
+    STZ INPUTBUFFERREAD
+    STZ INPUTBUFFERWRITE
+
+    STZ INPUTBUFFEREMPTY
+
+
+    LDA #'E'
+    JSR pushToBuffer
+    JSR pushToBuffer
+    JSR pushToBuffer
+    JSR pushToBuffer
+
+
     ; To print characters, BBC BASIC uses the address stored in $020F-$020E. We need to load those addresses with our OSWRCH routine.
     LDA #>OSWRCHV ; Get the high byte of the write character routine.
     STA $020F ; Store it in $020F.
@@ -238,12 +262,9 @@ OSRDCHV:
     SEC ; If the escape flag IS set, set the carry bit and exit early without reading the character.
     RTS
 readCharacterBuffer:
-    ; If there's no escape flag set, let's check the READBUFFER to see if it's full.
-    ; We don't read the ACIA directly here. We use the IRQ interrupt handler to read the character and place it into READBUFFER.
-    ; A full READBUFFER essentially means that there's a character that's been received by the ACIA that hasn't been read yet.
-    LDA READBUFFER ; Read what's in READBUFFER.
-    BEQ readCharacterBuffer ; If it's empty, keep reading until it's full.
-    STZ READBUFFER ; Is it full? Keep what's in A, and clear the character buffer
+    JSR bufferDifference
+    BEQ readCharacterBuffer
+    JSR readFromBuffer
     CLC ; Clear the carry bit. BBC BASIC uses the carry bit to track if we're in an 'escape condition' or not.
     RTS ; Return to the main routine.
 
@@ -265,6 +286,28 @@ OSWRCHV:
     CLI ; Enable interrupts while we are printing a character.
     JSR print_char ; Also print the same character to the LCD.
     PLP ; Restore caller's interupt state.
+    RTS
+
+readFromBuffer:
+    PHX ; save X
+    LDX INPUTBUFFERREAD
+    LDA INPUTBUFFER, X
+    INC INPUTBUFFERREAD
+    PLX
+    RTS
+
+pushToBuffer:
+    PHX
+    LDX INPUTBUFFERWRITE
+    STA INPUTBUFFER, X
+    INC INPUTBUFFERWRITE
+    PLX
+    RTS
+
+bufferDifference:
+    LDA INPUTBUFFERWRITE ; Find difference between number of bytes written
+    SEC ; and how many read.
+    SBC INPUTBUFFERREAD ; Ends with A showing the number of bytes left to read.
     RTS
 
 ; OSBYTE: 'OS Byte'
@@ -301,8 +344,9 @@ OSBYTE84: ; Routine to return the highest address of free RAM space.
     RTS
 
 OSBYTE83: ; Routine to return the lowest address of free RAM space.
-    ; Put address '$0800' in YX registers. Anything below $0800 is memory space reserved by BBC MOS.
-    LDY #$08 ; High byte goes into Y
+    ; Put address '$0900' in YX registers. 
+    ; Anything below $0800 is memory space reserved by BBC MOS. $0900-09FF is reserved for the input buffer.
+    LDY #$09 ; High byte goes into Y
     LDX #$00  ; Low byte goes into X
     RTS
 
@@ -778,7 +822,7 @@ irqv: ; Otherwise, it's an IRQ. Let's check what caused the interrupt, starting 
     BEQ irq_via_tick ; If we've ruled out the ACIA and Keyboard, let's assume it was the timer.
 irq_acia:
     LDA ACIA_DATA ; Read the ACIA. Because reading the ACIA clears the data, this is the only place allowed to read it directly!
-    STA READBUFFER ; Store it in memory for OSWRCHV to use.
+    JSR pushToBuffer ; Store it in memory for OSWRCHV to use.
     CMP #$1B ; Check if an escape key was pressed
     BNE end_irq ; If it's not an escape key, we've done everything we need. Skip to the end.
     LDA #$FF ; If an escape key was pressed, let's set the escape flag.
