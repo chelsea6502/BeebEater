@@ -217,13 +217,6 @@ clearBufferLoop:
     STZ INPUTBUFFEREMPTY
 
 
-    LDA #'E'
-    JSR pushToBuffer
-    JSR pushToBuffer
-    JSR pushToBuffer
-    JSR pushToBuffer
-
-
     ; To print characters, BBC BASIC uses the address stored in $020F-$020E. We need to load those addresses with our OSWRCH routine.
     LDA #>OSWRCHV ; Get the high byte of the write character routine.
     STA $020F ; Store it in $020F.
