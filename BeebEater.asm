@@ -414,9 +414,14 @@ newLineAndExit:
     CLC
     RTS
 Escape:
+    LDX OSXREG
+    LDY OSYREG
     PLP
     LDA OSESC                   ; Get escape flag
     ROL                         ; If the escape flag is set, also set the carry bit.
+    PHP
+    LDA OSAREG
+    PLP
     CLI                         ; Re-enable interrupts
     RTS
 
