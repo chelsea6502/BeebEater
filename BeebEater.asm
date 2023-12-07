@@ -248,7 +248,6 @@ readCharacterBuffer:
     JSR bufferDifference
     BEQ readCharacterBuffer
     JSR readFromBuffer
-    JSR bufferDifference
 buffer_full:
     CLC ; Clear the carry bit. BBC BASIC uses the carry bit to track if we're in an 'escape condition' or not.
     RTS ; Return to the main routine.
