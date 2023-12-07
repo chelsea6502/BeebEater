@@ -119,7 +119,7 @@ reset:
     STA ACIA_CMD
 
     ; Initialise the ACIA control register
-    LDA #%00011110 ; 1 stop bit, 8 bits, 9600 baud.
+    LDA #%00010000 ; 1 stop bit, 8 bits, 115200 baud.
     STA ACIA_CTRL
 
     ; --- VIA 6522 Initialisation ---
@@ -260,18 +260,19 @@ readCharacterBuffer:
 ; System call that displays whatever character is in A. This doesn't necessarily have to be an ASCII character.
 ; The 'V' in "OSWRCHV" means "Vector". When BBC BASIC jumps to the OSWRCH address, it jumps straight to here.
 OSWRCHV:
+    SEI
     STA ACIA_DATA ; Send the character to the ACIA where it will immediately try to transmit it through 'Tx'.
 
     ; Because of the WDC 6551 ACIA transmit bug, We need around 86 microseconds between now and the end of RTS (assuming 115200 baud & 1mhz clock).
     PHA
     PHY
-    JSR delay_1100us
-    ;JSR delay_100us ; Add one for each extra Mhz clock rate, in case you're running at 2+ Mhz.
+    JSR delay_100us
     PLY
     PLA
+    CLI
 
     PHP ; Save caller's interupt state
-    CLI ; Enable interrupts while we are printing a character.
+    ;CLI ; Enable interrupts while we are printing a character.
     JSR print_char ; Also print the same character to the LCD.
     PLP ; Restore caller's interupt state.
     RTS
@@ -776,12 +777,6 @@ delay_100us:
     LDY #9
     JMP delay_loop
 
-
-delay_1100us:
-    LDA #0
-    LDY #130
-    JMP delay_loop
-
 delay_loop:   
     CPY  #1
     DEY
@@ -802,18 +797,17 @@ irqv: ; Otherwise, it's an IRQ. Let's check what caused the interrupt, starting 
     PHX
     LDA ACIA_STATUS
     LDX ACIA_DATA
-    AND #$88 ; Check the ACIA status register to find out if the ACIA is asking to read a character.
-    BPL irq_via ; If yes, jump to the acia handler.
+    AND #$08 ; Check the ACIA status register to find out if the ACIA is asking to read a character.
+    BEQ irq_via ; If yes, jump to the acia handler.
 irq_acia:
-    BEQ irq_via
     TXA
     LDX INPUTBUFFERWRITE
     STA INPUTBUFFER, X
     INC INPUTBUFFERWRITE
     LDA ACIA_STATUS
     LDX ACIA_DATA
-    AND #$88 ; Check the ACIA status register to find out if the ACIA is asking to read a character.
-    BMI irq_acia ; If yes, jump to the acia handler.
+    AND #$08 ; Check the ACIA status register to find out if the ACIA is asking to read a character.
+    BNE irq_acia
 irq_escape_check:
     TXA
     CMP #$1B ; Check if an escape key was pressed
