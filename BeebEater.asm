@@ -818,17 +818,14 @@ interrupt:
     AND #$10 ; Check if it's a BRK or an IRQ.
     BNE BRKV ; If it's BRK, that's an error. Go to the BRK vector.
 irqv: ; Otherwise, it's an IRQ. Let's check what caused the interrupt, starting with the ACIA.
+    PHX
     LDA ACIA_STATUS
+    LDX ACIA_DATA
     AND #$88 ; Check the ACIA status register to find out if the ACIA is asking to read a character.
-    CMP #$88 ; Check if it's specifically because the recieve register is full
-    BEQ irq_acia ; If yes, jump to the acia handler.
-    LDA IFR ; Check the "Interrupt Flag Register" to make sure it was the keyboard that caused the interrupt.
-    AND #%00000010 ; We have to check bit 2.
-    BNE irq_keyboard 
-    BEQ irq_via_tick ; If we've ruled out the ACIA and Keyboard, let's assume it was the timer.
+    BPL irq_via ; If yes, jump to the acia handler.
+    BEQ irq_via
 irq_acia:
-    LDA ACIA_DATA ; Read the ACIA. Because reading the ACIA clears the data, this is the only place allowed to read it directly!
-    STA READBUFFER
+    TXA
     JSR pushToBuffer ; Store it in memory for OSWRCHV to use.
     JSR  bufferDifference     ; Now see how full the buffer is.
     CMP  #240       ; If it has less than 240 bytes unread,
@@ -836,12 +833,18 @@ irq_acia:
     LDA  #1          ; Else, tell the other end to stop sending data before
     STA  ACIA_CMD   ; the buffer overflows, by storing 1 in the ACIA's command register.  (See text.)
 irq_escape_check:
-    LDA READBUFFER
+    TXA
     CMP #$1B ; Check if an escape key was pressed
-    BNE end_irq ; If it's not an escape key, we've done everything we need. Skip to the end.
+    BNE irq_via ; If it's not an escape key, we've done everything we need. Skip to the end.
     LDA #$FF ; If an escape key was pressed, let's set the escape flag.
     STA OSESC ; set the 'escape flag'.
     JMP irqv
+irq_via:
+    PLX
+    LDA IFR ; Check the "Interrupt Flag Register" to make sure it was the keyboard that caused the interrupt.
+    AND #%00000010 ; We have to check bit 2.
+    BNE irq_keyboard 
+    BEQ irq_via_tick ; If we've ruled out the ACIA and Keyboard, let's assume it was the timer.
 irq_keyboard: ; If we've ruled out the ACIA, then let's try the keyboard.
     JSR keyboard_interrupt ; Jump to the routine that reads PORTA and and prints the character.
     JMP end_irq ; Finish the interrupt.
