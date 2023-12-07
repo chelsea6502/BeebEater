@@ -250,7 +250,7 @@ readCharacterBuffer:
     JSR readFromBuffer
     PHA
     JSR bufferDifference
-    CMP  #$E0        ; Is it at least 224?
+    CMP  #224        ; Is it at least 224?
     BCS  buffer_full    ; If so, leave the sending end turned off.
     LDA  #%00001001  ; Else, tell the sending end that it's ok to start
     STA  ACIA_CMD   ; sending data again, by setting its CTS line true.
@@ -831,7 +831,7 @@ irq_acia:
     STA READBUFFER
     JSR pushToBuffer ; Store it in memory for OSWRCHV to use.
     JSR  bufferDifference     ; Now see how full the buffer is.
-    CMP  #$F0       ; If it has less than 240 bytes unread,
+    CMP  #240       ; If it has less than 240 bytes unread,
     BCC  irq_escape_check         ; just exit the ISR here.
     LDA  #1          ; Else, tell the other end to stop sending data before
     STA  ACIA_CMD   ; the buffer overflows, by storing 1 in the ACIA's command register.  (See text.)
