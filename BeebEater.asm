@@ -241,14 +241,18 @@ printBootMessageLoop:
 ; We use this to receive input from your keyboard to the the caller.
 ; It also checks if the escape key has been pressed. If it has, it lets the caller know so it needs to leave whatever it's running.
 OSRDCHV:
+    PHX
     BBR7 OSESC, readCharacterBuffer ; Is the escape flag set? If not, jump ahead to read the character.
+    PLX
     SEC ; If the escape flag IS set, set the carry bit and exit early without reading the character.
     RTS
 readCharacterBuffer:
-    JSR bufferDifference
+    LDX INPUTBUFFERREAD
+    CPX INPUTBUFFERWRITE
     BEQ readCharacterBuffer
-    JSR readFromBuffer
-buffer_full:
+    LDA INPUTBUFFER, X
+    INC INPUTBUFFERREAD
+    PLX
     CLC ; Clear the carry bit. BBC BASIC uses the carry bit to track if we're in an 'escape condition' or not.
     RTS ; Return to the main routine.
 
@@ -270,21 +274,6 @@ OSWRCHV:
     CLI ; Enable interrupts while we are printing a character.
     JSR print_char ; Also print the same character to the LCD.
     PLP ; Restore caller's interupt state.
-    RTS
-
-readFromBuffer:
-    PHX ; save X
-    LDX INPUTBUFFERREAD
-    LDA INPUTBUFFER, X
-    INC INPUTBUFFERREAD
-    PLX
-    RTS
-
-
-bufferDifference:
-    LDA INPUTBUFFERWRITE ; Find difference between number of bytes written
-    SEC ; and how many read.
-    SBC INPUTBUFFERREAD ; Ends with A showing the number of bytes left to read.
     RTS
 
 flushBuffer:
