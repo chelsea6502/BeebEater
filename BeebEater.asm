@@ -832,17 +832,16 @@ irq_acia:
     JSR pushToBuffer ; Store it in memory for OSWRCHV to use.
     JSR  bufferDifference     ; Now see how full the buffer is.
     CMP  #$F0       ; If it has less than 240 bytes unread,
-    BCC  irqv         ; just exit the ISR here.
+    BCC  irq_escape_check         ; just exit the ISR here.
     LDA  #1          ; Else, tell the other end to stop sending data before
     STA  ACIA_CMD   ; the buffer overflows, by storing 1 in the ACIA's command register.  (See text.)
-    JMP irqv
 irq_escape_check:
     LDA READBUFFER
     CMP #$1B ; Check if an escape key was pressed
     BNE end_irq ; If it's not an escape key, we've done everything we need. Skip to the end.
     LDA #$FF ; If an escape key was pressed, let's set the escape flag.
     STA OSESC ; set the 'escape flag'.
-    JMP end_irq
+    JMP irqv
 irq_keyboard: ; If we've ruled out the ACIA, then let's try the keyboard.
     JSR keyboard_interrupt ; Jump to the routine that reads PORTA and and prints the character.
     JMP end_irq ; Finish the interrupt.
@@ -870,11 +869,16 @@ BRKV:
     PHX                 ; Save X
     TSX                 ; Get the stack pointer value
     LDA $0103,X         ; Get the low byte of the error message location, offset by the stack pointer.
-    DEC                 ; Subtract one, as BRK stores BRK+2 to the stack by default, rather than the BRK+1 that we need.
+    SEC                    
+    SBC #1              ; Decrement 1. Use "SBC #1" instead of "DEC", because 'DEC' does not set the carry bit.
     STA OSFAULT         ; Store the low byte into the fault handler.
     LDA $0104,X         ; Get the high byte of the error message location.
+    SBC #0              ; Did subtracting 1 from the low byte cause the carry bit to set? Subtract 1 from the high byte too.
     STA OSFAULT+1       ; Store the high byte into the fault handler.
+    STX OSXREG          ; Store the location of the last break for the error handler.
     PLX                 ; Restore X
+    LDA OSINTA
+    CLI
     JMP ($0202)         ; Jump to BBC BASIC's error handler routine, which takes it from there. Address $0202 points to the routine.
 
 
