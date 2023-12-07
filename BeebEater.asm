@@ -811,11 +811,16 @@ BRKV:
     PHX                 ; Save X
     TSX                 ; Get the stack pointer value
     LDA $0103,X         ; Get the low byte of the error message location, offset by the stack pointer.
-    DEC                 ; Subtract one, as BRK stores BRK+2 to the stack by default, rather than the BRK+1 that we need.
+    SEC                    
+    SBC #1              ; Decrement 1. Use "SBC #1" instead of "DEC", because 'DEC' does not set the carry bit.
     STA OSFAULT         ; Store the low byte into the fault handler.
     LDA $0104,X         ; Get the high byte of the error message location.
+    SBC #0              ; Did subtracting 1 from the low byte cause the carry bit to set? Subtract 1 from the high byte too.
     STA OSFAULT+1       ; Store the high byte into the fault handler.
+    STX OSXREG          ; Store the location of the last break for the error handler.
     PLX                 ; Restore X
+    LDA OSINTA
+    CLI
     JMP ($0202)         ; Jump to BBC BASIC's error handler routine, which takes it from there. Address $0202 points to the routine.
 
 
