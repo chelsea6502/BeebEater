@@ -254,6 +254,11 @@ readCharacterBuffer:
     BCS  buffer_full    ; If so, leave the sending end turned off.
     LDA  #%00001001  ; Else, tell the sending end that it's ok to start
     STA  ACIA_CMD   ; sending data again, by setting its CTS line true.
+    PHA
+    PHY
+    JSR delay_100us
+    PLY
+    PLA
 buffer_full:
     PLA
     CLC ; Clear the carry bit. BBC BASIC uses the carry bit to track if we're in an 'escape condition' or not.
@@ -374,12 +379,13 @@ OSWORDV:
     CMP #$00        ; Is it the 'Read Line' system call?
     BEQ OSWORD0V    ; If yes, start reading input from the user.
     CMP #$01        ; Is it the 'Read Clock' system call?
-    BEQ OSWORD1V    ; Jump to it if yes
+    BEQ OSWORD1V_JUMP    ; Jump to it if yes
     CMP #$02        ; Is it the 'Write Clock' system call?
     BEQ OSWORD2V_JUMP    ; Jump to it if yes
     PLP             ; Restore caller's IRQs
     RTS             ; Otherwise, return with no change.
 
+OSWORD1V_JUMP: JMP OSWORD1V ; OSWORD2V is too far away to directly jump, so we have to make a JMP here instead.
 OSWORD2V_JUMP: JMP OSWORD2V ; OSWORD2V is too far away to directly jump, so we have to make a JMP here instead.
 
 OSWORD0V:
@@ -838,7 +844,8 @@ irq_escape_check:
     BNE irq_via ; If it's not an escape key, we've done everything we need. Skip to the end.
     LDA #$FF ; If an escape key was pressed, let's set the escape flag.
     STA OSESC ; set the 'escape flag'.
-    JMP irqv
+    PLX
+    JMP end_irq
 irq_via:
     PLX
     LDA IFR ; Check the "Interrupt Flag Register" to make sure it was the keyboard that caused the interrupt.
