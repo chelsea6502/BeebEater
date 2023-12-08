@@ -119,7 +119,7 @@ reset:
     STA ACIA_CMD
 
     ; Initialise the ACIA control register
-    LDA #%00011110 ; 1 stop bit, 8 bits, 9600 baud.
+    LDA #%00010000 ; 1 stop bit, 8 bits, 16x baud. ('16x' means 115200 on a 1.8432Mhz clock)
     STA ACIA_CTRL
 
     ; --- VIA 6522 Initialisation ---
@@ -248,8 +248,14 @@ readCharacterBuffer:
     JSR bufferDifference
     BEQ readCharacterBuffer
     JSR readFromBuffer
+    PHA
     JSR bufferDifference
+    CMP  #224        ; Is it at least 224?
+    BCS  buffer_full    ; If so, leave the sending end turned off.
+    LDA  #%00001001  ; Else, tell the sending end that it's ok to start
+    STA  ACIA_CMD   ; sending data again, by setting its CTS line true.
 buffer_full:
+    PLA
     CLC ; Clear the carry bit. BBC BASIC uses the carry bit to track if we're in an 'escape condition' or not.
     RTS ; Return to the main routine.
 
@@ -262,7 +268,7 @@ OSWRCHV:
     ; Because of the WDC 6551 ACIA transmit bug, We need around 86 microseconds between now and the end of RTS (assuming 115200 baud & 1mhz clock).
     PHA
     PHY
-    JSR delay_1100us
+    JSR delay_100us
     ;JSR delay_100us ; Add one for each extra Mhz clock rate, in case you're running at 2+ Mhz.
     PLY
     PLA
@@ -281,6 +287,13 @@ readFromBuffer:
     PLX
     RTS
 
+pushToBuffer:
+    PHX
+    LDX INPUTBUFFERWRITE
+    STA INPUTBUFFER, X
+    INC INPUTBUFFERWRITE
+    PLX
+    RTS
 
 bufferDifference:
     LDA INPUTBUFFERWRITE ; Find difference between number of bytes written
@@ -788,12 +801,6 @@ delay_100us:
     LDY #9
     JMP delay_loop
 
-
-delay_1100us:
-    LDA #0
-    LDY #130
-    JMP delay_loop
-
 delay_loop:   
     CPY  #1
     DEY
@@ -816,16 +823,15 @@ irqv: ; Otherwise, it's an IRQ. Let's check what caused the interrupt, starting 
     LDX ACIA_DATA
     AND #$88 ; Check the ACIA status register to find out if the ACIA is asking to read a character.
     BPL irq_via ; If yes, jump to the acia handler.
-irq_acia:
     BEQ irq_via
+irq_acia:
     TXA
-    LDX INPUTBUFFERWRITE
-    STA INPUTBUFFER, X
-    INC INPUTBUFFERWRITE
-    LDA ACIA_STATUS
-    LDX ACIA_DATA
-    AND #$88 ; Check the ACIA status register to find out if the ACIA is asking to read a character.
-    BMI irq_acia ; If yes, jump to the acia handler.
+    JSR pushToBuffer ; Store it in memory for OSWRCHV to use.
+    JSR  bufferDifference     ; Now see how full the buffer is.
+    CMP  #240       ; If it has less than 240 bytes unread,
+    BCC  irq_escape_check         ; just exit the ISR here.
+    LDA  #1          ; Else, tell the other end to stop sending data before
+    STA  ACIA_CMD   ; the buffer overflows, by storing 1 in the ACIA's command register.  (See text.)
 irq_escape_check:
     TXA
     CMP #$1B ; Check if an escape key was pressed
