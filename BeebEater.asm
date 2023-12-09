@@ -251,22 +251,10 @@ OSRDCHV:
     RTS
 readCharacterBuffer:
     LDA INPUTBUFFERWRITE ; Find difference between number of bytes written
-    SEC ; and how many read.
-    SBC INPUTBUFFERREAD ; Ends with A showing the number of bytes left to read.
+    EOR INPUTBUFFERREAD ; Ends with A showing the number of bytes left to read.
     BEQ readCharacterBuffer
     LDA (INPUTBUFFERREAD)
     INC INPUTBUFFERREAD
-    PHA
-
-    LDA INPUTBUFFERWRITE ; Find difference between number of bytes written
-    SEC ; and how many read.
-    SBC INPUTBUFFERREAD ; Ends with A showing the number of bytes left to read.
-    CMP  #224        ; Is it at least 224?
-    BCS  buffer_full    ; If so, leave the sending end turned off.
-    LDA  #%00001001  ; Else, tell the sending end that it's ok to start
-    STA  ACIA_CMD   ; sending data again, by setting its CTS line true.
-buffer_full:
-    PLA
     CLC ; Clear the carry bit. BBC BASIC uses the carry bit to track if we're in an 'escape condition' or not.
     RTS ; Return to the main routine.
 
@@ -819,29 +807,8 @@ irq_acia:
     STA (INPUTBUFFERWRITE) ; Push to buffer
     INC INPUTBUFFERWRITE
     CMP #$1B
-    BNE irq_acia_notEscape ; Was the escape character sent?
+    BNE irq_via ; Was the escape character sent?
     SMB7 OSESC ; Set the escape flag.
-irq_acia_notEscape:
-    LDA ACIA_STATUS ; Check if there's more characters to read
-    BIT #$08
-    BNE irq_acia ; Re-read the ACIA if there's more.
-    LDA INPUTBUFFERWRITE ; Find difference between number of bytes written
-    SEC ; and how many read.
-    SBC INPUTBUFFERREAD ; Ends with A showing the number of bytes left to read.
-    CMP  #240       ; If it has less than 240 bytes unread,
-    BCC  irq_via         ; Move on to the VIA
-
-    
-blah: ; Wait for registers to fill/empty before we close the input.
-    PHA
-    PHY
-    JSR delay_100us
-    PLY
-    PLA
-
-    LDA  #1          ; Else, tell the other end to stop sending data before
-    STA  ACIA_CMD   ; the buffer overflows, by storing 1 in the ACIA's command register.
-    BRA irqv ; read the last character
 irq_via:
     LDA IFR ; Check the "Interrupt Flag Register" to make sure it was the keyboard that caused the interrupt.
     AND #%00000010 ; We have to check bit 2.
