@@ -250,10 +250,10 @@ OSRDCHV:
     SEC ; If the escape flag IS set, set the carry bit and exit early without reading the character.
     RTS
 readCharacterBuffer:
-    LDA INPUTBUFFERWRITE ; Find difference between number of bytes written
-    EOR INPUTBUFFERREAD ; Ends with A showing the number of bytes left to read.
-    BEQ readCharacterBuffer
-    LDA (INPUTBUFFERREAD)
+    LDA INPUTBUFFERWRITE
+    EOR INPUTBUFFERREAD
+    BEQ readCharacterBuffer ; Keep looping until there's something to read.
+    LDA (INPUTBUFFERREAD) ; Load it into A
     INC INPUTBUFFERREAD
     CLC ; Clear the carry bit. BBC BASIC uses the carry bit to track if we're in an 'escape condition' or not.
     RTS ; Return to the main routine.
