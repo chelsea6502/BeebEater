@@ -257,16 +257,14 @@ readCharacterBuffer:
     LDA (INPUTBUFFERREAD)
     INC INPUTBUFFERREAD
     PHA
-    JSR bufferDifference
+
+    LDA INPUTBUFFERWRITE ; Find difference between number of bytes written
+    SEC ; and how many read.
+    SBC INPUTBUFFERREAD ; Ends with A showing the number of bytes left to read.
     CMP  #224        ; Is it at least 224?
     BCS  buffer_full    ; If so, leave the sending end turned off.
     LDA  #%00001001  ; Else, tell the sending end that it's ok to start
     STA  ACIA_CMD   ; sending data again, by setting its CTS line true.
-    PHA
-    PHY
-    JSR delay_100us
-    PLY
-    PLA
 buffer_full:
     PLA
     CLC ; Clear the carry bit. BBC BASIC uses the carry bit to track if we're in an 'escape condition' or not.
@@ -292,12 +290,6 @@ OSWRCHV:
     PLP ; Restore caller's interupt state.
     RTS
 
-
-bufferDifference:
-    LDA INPUTBUFFERWRITE ; Find difference between number of bytes written
-    SEC ; and how many read.
-    SBC INPUTBUFFERREAD ; Ends with A showing the number of bytes left to read.
-    RTS
 
 flushBuffer:
     LDX #0
@@ -815,33 +807,38 @@ interrupt:
     AND #$10 ; Check if it's a BRK or an IRQ.
     BNE BRKV ; If it's BRK, that's an error. Go to the BRK vector.
 irqv: ; Otherwise, it's an IRQ. Let's check what caused the interrupt, starting with the ACIA.
-    PHX
     LDA ACIA_STATUS
-    LDX ACIA_DATA
-    AND #$88 ; Check the ACIA status register to find out if the ACIA is asking to read a character.
-    BPL irq_via ; If yes, jump to the acia handler.
-    BEQ irq_via
+    BIT #$08
+    BEQ irq_via ; Skip ahead if bit 3 isn't set
 irq_acia:
-    TXA
+    LDA ACIA_DATA
     STA (INPUTBUFFERWRITE) ; Push to buffer
     INC INPUTBUFFERWRITE
+    CMP #$1B
+    BNE irq_acia_notEscape ; Was the escape character sent?
+    SMB7 OSESC ; Set the escape flag.
+irq_acia_notEscape:
+    LDA ACIA_STATUS ; Check if there's more characters to read
+    BIT #$08
+    BNE irq_acia ; Re-read the ACIA if there's more.
     LDA INPUTBUFFERWRITE ; Find difference between number of bytes written
     SEC ; and how many read.
-    SBC INPUTBUFFERREAD ; Ends with A showing the number of bytes left to read.     ; Now see how full the buffer is.
+    SBC INPUTBUFFERREAD ; Ends with A showing the number of bytes left to read.
     CMP  #240       ; If it has less than 240 bytes unread,
-    BCC  irq_escape_check         ; just exit the ISR here.
+    BCC  irq_via         ; Move on to the VIA
+
+    
+blah: ; Wait for registers to fill/empty before we close the input.
+    PHA
+    PHY
+    JSR delay_100us
+    PLY
+    PLA
+
     LDA  #1          ; Else, tell the other end to stop sending data before
-    STA  ACIA_CMD   ; the buffer overflows, by storing 1 in the ACIA's command register.  (See text.)
-irq_escape_check:
-    TXA
-    CMP #$1B ; Check if an escape key was pressed
-    BNE irq_via ; If it's not an escape key, we've done everything we need. Skip to the end.
-    LDA #$FF ; If an escape key was pressed, let's set the escape flag.
-    STA OSESC ; set the 'escape flag'.
-    PLX
-    JMP end_irq
+    STA  ACIA_CMD   ; the buffer overflows, by storing 1 in the ACIA's command register.
+    BRA irqv ; read the last character
 irq_via:
-    PLX
     LDA IFR ; Check the "Interrupt Flag Register" to make sure it was the keyboard that caused the interrupt.
     AND #%00000010 ; We have to check bit 2.
     BNE irq_keyboard 
