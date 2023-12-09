@@ -30,6 +30,12 @@ LCDBUFFER       = OSVDUWS ; For storing a line of LCD characters.
 LCDREADBUFFER =   OSVDU
 LCDWRITEBUFFER = OSVDU+1
 
+INPUTBUFFER = $0800
+INPUTBUFFERREAD = $50
+; Keep $51 open
+INPUTBUFFERWRITE = $52
+; Keep $52 open
+
 ; Keyboard flag constants:
 RELEASE = %00000001 ; Flag for if a key has just been released.
 SHIFT   = %00000010 ; Flag for if we are holding down the shift key.
@@ -200,6 +206,12 @@ reset:
     ; Initialise KEYBOARD_FLAGS to 0
     STZ KEYBOARD_FLAGS
 
+    LDA #$08
+    STA INPUTBUFFERREAD+1
+    STA INPUTBUFFERWRITE+1
+
+    JSR flushBuffer
+
     ; To print characters, BBC BASIC uses the address stored in $020F-$020E. We need to load those addresses with our OSWRCH routine.
     LDA #>OSWRCHV ; Get the high byte of the write character routine.
     STA $020F ; Store it in $020F.
@@ -238,12 +250,11 @@ OSRDCHV:
     SEC ; If the escape flag IS set, set the carry bit and exit early without reading the character.
     RTS
 readCharacterBuffer:
-    ; If there's no escape flag set, let's check the READBUFFER to see if it's full.
-    ; We don't read the ACIA directly here. We use the IRQ interrupt handler to read the character and place it into READBUFFER.
-    ; A full READBUFFER essentially means that there's a character that's been received by the ACIA that hasn't been read yet.
-    LDA READBUFFER ; Read what's in READBUFFER.
-    BEQ readCharacterBuffer ; If it's empty, keep reading until it's full.
-    STZ READBUFFER ; Is it full? Keep what's in A, and clear the character buffer
+    LDA INPUTBUFFERWRITE ; Find difference between number of bytes written
+    EOR INPUTBUFFERREAD ; Ends with A showing the number of bytes left to read.
+    BEQ readCharacterBuffer
+    LDA (INPUTBUFFERREAD)
+    INC INPUTBUFFERREAD
     CLC ; Clear the carry bit. BBC BASIC uses the carry bit to track if we're in an 'escape condition' or not.
     RTS ; Return to the main routine.
 
@@ -254,17 +265,26 @@ OSWRCHV:
     STA ACIA_DATA ; Send the character to the ACIA where it will immediately try to transmit it through 'Tx'.
 
     ; Because of the WDC 6551 ACIA transmit bug, We need around 86 microseconds between now and the end of RTS (assuming 115200 baud & 1mhz clock).
-    PHA
-    PHY
     JSR delay_100us
     ;JSR delay_100us ; Add one for each extra Mhz clock rate, in case you're running at 2+ Mhz.
-    PLY
-    PLA
 
     PHP ; Save caller's interupt state
     CLI ; Enable interrupts while we are printing a character.
     JSR print_char ; Also print the same character to the LCD.
     PLP ; Restore caller's interupt state.
+    RTS
+
+
+flushBuffer:
+    LDX #0
+clearBufferLoop:
+    STZ INPUTBUFFER, X
+    INX
+    BNE clearBufferLoop 
+
+    STZ INPUTBUFFERREAD
+    STZ INPUTBUFFERWRITE
+
     RTS
 
 ; OSBYTE: 'OS Byte'
@@ -301,8 +321,9 @@ OSBYTE84: ; Routine to return the highest address of free RAM space.
     RTS
 
 OSBYTE83: ; Routine to return the lowest address of free RAM space.
-    ; Put address '$0800' in YX registers. Anything below $0800 is memory space reserved by BBC MOS.
-    LDY #$08 ; High byte goes into Y
+    ; Put address '$0900' in YX registers. 
+    ; Anything below $0800 is memory space reserved by BBC MOS. $0900-09FF is reserved for the input buffer.
+    LDY #$09 ; High byte goes into Y
     LDX #$00  ; Low byte goes into X
     RTS
 
@@ -415,8 +436,7 @@ newLineAndExit:
     CLC
     RTS
 Escape:
-    LDX OSXREG
-    LDY OSYREG
+    JSR flushBuffer
     PLP
     LDA OSESC                   ; Get escape flag
     ROL                         ; If the escape flag is set, also set the carry bit.
@@ -743,16 +763,22 @@ exit_lcd:
 
 ; Set A and Y such that microseconds = 9*(256*A+Y)+20. This is assuming a 1mhz clock.
 delay_15ms:
+    PHA
+    PHY
     LDA #6
     LDY #129
     JMP delay_loop
 
 delay_4100us:
+    PHA
+    PHY
     LDA #1
     LDY #198
     JMP delay_loop
 
 delay_100us:
+    PHA
+    PHY
     LDA #0
     LDY #9
     JMP delay_loop
@@ -762,6 +788,8 @@ delay_loop:
     DEY
     SBC  #0
     BCS  delay_loop
+    PLY
+    PLA
     RTS
 
 ; -- Interrupt Handling --
@@ -775,21 +803,20 @@ interrupt:
     BNE BRKV ; If it's BRK, that's an error. Go to the BRK vector.
 irqv: ; Otherwise, it's an IRQ. Let's check what caused the interrupt, starting with the ACIA.
     LDA ACIA_STATUS
-    AND #$88 ; Check the ACIA status register to find out if the ACIA is asking to read a character.
-    CMP #$88 ; Check if it's specifically because the recieve register is full
-    BEQ irq_acia ; If yes, jump to the acia handler.
+    BIT #$08
+    BEQ irq_via ; Skip ahead if bit 3 isn't set
+irq_acia:
+    LDA ACIA_DATA
+    STA (INPUTBUFFERWRITE) ; Push to buffer
+    INC INPUTBUFFERWRITE
+    CMP #$1B
+    BNE irq_via ; Was the escape character sent?
+    SMB7 OSESC ; Set the escape flag.
+irq_via:
     LDA IFR ; Check the "Interrupt Flag Register" to make sure it was the keyboard that caused the interrupt.
     AND #%00000010 ; We have to check bit 2.
     BNE irq_keyboard 
     BEQ irq_via_tick ; If we've ruled out the ACIA and Keyboard, let's assume it was the timer.
-irq_acia:
-    LDA ACIA_DATA ; Read the ACIA. Because reading the ACIA clears the data, this is the only place allowed to read it directly!
-    STA READBUFFER ; Store it in memory for OSWRCHV to use.
-    CMP #$1B ; Check if an escape key was pressed
-    BNE end_irq ; If it's not an escape key, we've done everything we need. Skip to the end.
-    LDA #$FF ; If an escape key was pressed, let's set the escape flag.
-    STA OSESC ; set the 'escape flag'.
-    JMP end_irq
 irq_keyboard: ; If we've ruled out the ACIA, then let's try the keyboard.
     JSR keyboard_interrupt ; Jump to the routine that reads PORTA and and prints the character.
     JMP end_irq ; Finish the interrupt.
