@@ -325,12 +325,13 @@ OSWORDV:
     CMP #$00        ; Is it the 'Read Line' system call?
     BEQ OSWORD0V    ; If yes, start reading input from the user.
     CMP #$01        ; Is it the 'Read Clock' system call?
-    BEQ OSWORD1V    ; Jump to it if yes
+    BEQ OSWORD1V_JUMP    ; Jump to it if yes
     CMP #$02        ; Is it the 'Write Clock' system call?
     BEQ OSWORD2V_JUMP    ; Jump to it if yes
     PLP             ; Restore caller's IRQs
     RTS             ; Otherwise, return with no change.
 
+OSWORD1V_JUMP: JMP OSWORD1V ; OSWORD2V is too far away to directly jump, so we have to make a JMP here instead.
 OSWORD2V_JUMP: JMP OSWORD2V ; OSWORD2V is too far away to directly jump, so we have to make a JMP here instead.
 
 OSWORD0V:
