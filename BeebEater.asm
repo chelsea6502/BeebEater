@@ -34,7 +34,7 @@ INPUTBUFFER = $0800
 INPUTBUFFERREAD = $50
 ; Keep $51 open
 INPUTBUFFERWRITE = $52
-; Keep $52 open
+; Keep $53 open
 
 ; Keyboard flag constants:
 RELEASE = %00000001 ; Flag for if a key has just been released.
