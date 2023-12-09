@@ -302,7 +302,7 @@ OSBYTEV:
     CMP #$84 ; Is it the 'read top of memory' system call?
     BEQ OSBYTE84 ; Put address '$4000' in YX registers.
     CMP #$83 ; Is it the 'read bottom of memory' system call?
-    BEQ OSBYTE83 ; Put address '$0800' in YX registers.
+    BEQ OSBYTE83 ; Put address '$0900' in YX registers.
     RTS ; Otherwise, return with nothing. 
 
 OSBYTE7E: ; Routine that 'acknowledges' the escape key has been pressed.
@@ -529,8 +529,7 @@ push_key:
     STA READBUFFER              ; Store the ASCII into READBUFFER
     CMP #$1B                    ; Is the character an escape character?
     BNE keyboard_interrupt_exit ; If not, we are done.
-    LDA #$FF                    ; If it IS the escape character, we need to signal that an escape state is active. 
-    STA OSESC                   ; set the 'escape flag' address at $FF to the value #$FF.
+    SMB7 OSESC
 keyboard_interrupt_exit:
     PLX                         ; Restore X
     PLA                         ; Restore A
