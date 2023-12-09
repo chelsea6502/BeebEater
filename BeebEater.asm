@@ -31,9 +31,10 @@ LCDREADBUFFER =   OSVDU
 LCDWRITEBUFFER = OSVDU+1
 
 INPUTBUFFER = $0800
-INPUTBUFFEREMPTY = $02CF
-INPUTBUFFERREAD = $02D8
-INPUTBUFFERWRITE = $02E1
+INPUTBUFFERREAD = $50
+; Keep $51 open
+INPUTBUFFERWRITE = $52
+; Keep $52 open
 
 ; Keyboard flag constants:
 RELEASE = %00000001 ; Flag for if a key has just been released.
@@ -205,6 +206,10 @@ reset:
     ; Initialise KEYBOARD_FLAGS to 0
     STZ KEYBOARD_FLAGS
 
+    LDA #$08
+    STA INPUTBUFFERREAD+1
+    STA INPUTBUFFERWRITE+1
+
     JSR flushBuffer
 
     ; To print characters, BBC BASIC uses the address stored in $020F-$020E. We need to load those addresses with our OSWRCH routine.
@@ -245,9 +250,12 @@ OSRDCHV:
     SEC ; If the escape flag IS set, set the carry bit and exit early without reading the character.
     RTS
 readCharacterBuffer:
-    JSR bufferDifference
+    LDA INPUTBUFFERWRITE ; Find difference between number of bytes written
+    SEC ; and how many read.
+    SBC INPUTBUFFERREAD ; Ends with A showing the number of bytes left to read.
     BEQ readCharacterBuffer
-    JSR readFromBuffer
+    LDA (INPUTBUFFERREAD)
+    INC INPUTBUFFERREAD
     PHA
     JSR bufferDifference
     CMP  #224        ; Is it at least 224?
@@ -284,21 +292,6 @@ OSWRCHV:
     PLP ; Restore caller's interupt state.
     RTS
 
-readFromBuffer:
-    PHX ; save X
-    LDX INPUTBUFFERREAD
-    LDA INPUTBUFFER, X
-    INC INPUTBUFFERREAD
-    PLX
-    RTS
-
-pushToBuffer:
-    PHX
-    LDX INPUTBUFFERWRITE
-    STA INPUTBUFFER, X
-    INC INPUTBUFFERWRITE
-    PLX
-    RTS
 
 bufferDifference:
     LDA INPUTBUFFERWRITE ; Find difference between number of bytes written
@@ -315,8 +308,6 @@ clearBufferLoop:
 
     STZ INPUTBUFFERREAD
     STZ INPUTBUFFERWRITE
-
-    STZ INPUTBUFFEREMPTY
 
     RTS
 
@@ -832,8 +823,11 @@ irqv: ; Otherwise, it's an IRQ. Let's check what caused the interrupt, starting 
     BEQ irq_via
 irq_acia:
     TXA
-    JSR pushToBuffer ; Store it in memory for OSWRCHV to use.
-    JSR  bufferDifference     ; Now see how full the buffer is.
+    STA (INPUTBUFFERWRITE) ; Push to buffer
+    INC INPUTBUFFERWRITE
+    LDA INPUTBUFFERWRITE ; Find difference between number of bytes written
+    SEC ; and how many read.
+    SBC INPUTBUFFERREAD ; Ends with A showing the number of bytes left to read.     ; Now see how full the buffer is.
     CMP  #240       ; If it has less than 240 bytes unread,
     BCC  irq_escape_check         ; just exit the ISR here.
     LDA  #1          ; Else, tell the other end to stop sending data before
