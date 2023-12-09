@@ -277,12 +277,8 @@ OSWRCHV:
     STA ACIA_DATA ; Send the character to the ACIA where it will immediately try to transmit it through 'Tx'.
 
     ; Because of the WDC 6551 ACIA transmit bug, We need around 86 microseconds between now and the end of RTS (assuming 115200 baud & 1mhz clock).
-    PHA
-    PHY
     JSR delay_100us
     ;JSR delay_100us ; Add one for each extra Mhz clock rate, in case you're running at 2+ Mhz.
-    PLY
-    PLA
 
     PHP ; Save caller's interupt state
     CLI ; Enable interrupts while we are printing a character.
@@ -776,16 +772,22 @@ exit_lcd:
 
 ; Set A and Y such that microseconds = 9*(256*A+Y)+20. This is assuming a 1mhz clock.
 delay_15ms:
+    PHA
+    PHY
     LDA #6
     LDY #129
     JMP delay_loop
 
 delay_4100us:
+    PHA
+    PHY
     LDA #1
     LDY #198
     JMP delay_loop
 
 delay_100us:
+    PHA
+    PHY
     LDA #0
     LDY #9
     JMP delay_loop
@@ -795,6 +797,8 @@ delay_loop:
     DEY
     SBC  #0
     BCS  delay_loop
+    PLY
+    PLA
     RTS
 
 ; -- Interrupt Handling --
