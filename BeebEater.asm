@@ -565,72 +565,82 @@ lcdbusy:
     RTS
 
 lcd_read:
-    PHA
+    PHX                         ; We're going to use X as a pointer to temporary stack storage.
+    PHA                         ; $0102,X contains the LCD flags
+    LDA #0
+    PHA                         ; $0101,X will contain the result.
+    TSX
+
     LDA #%11110000              ; We need to set the lower four bits of PORTB to 'input' to read the busy flag.
     STA DDRB
-    PLA
     
-    PHA
+    LDA $0102,X                 ; Toggle the E bit on, with any flags we have set before
     STA PORTB
     LDA #E
     TSB PORTB
 
     LDA PORTB                   ; Read the high four bits. The first bit will have the busy flag.
+    ASL                         ; Move it up to the high 4 bits.
     ASL
     ASL
     ASL
-    ASL
-    STA LCDREADBUFFER
+    STA $0101,X                 ; Store it
 
-    PLA
-    PHA
+    LDA $0102,X                 ; Toggle the E bit on, with any flags we have set before
     STA PORTB
     LDA #E
     TSB PORTB
 
-    LDA PORTB
-    AND #%00001111
+    LDA PORTB                   ; Read the low four bits
+    AND #%00001111              ; Mask out any high bits, if any
+    ORA $0101,X                 ; Store the low four bits.
+    STA $0101,X
 
-    ORA LCDREADBUFFER
-    STA LCDREADBUFFER
-
-    PLA
+    PLA                         ; Get the flags one more time to close reading.
     STA PORTB
 
     LDA #%11111111
     STA DDRB
 
-    LDA LCDREADBUFFER
+    PLA                         ; Get our final result
     
+    PLX
     RTS
 
 LCD_WRITE:
     JSR lcd_wait
 
-    PHA                         ; store the LCD flags twice
-    PHA
+    PHX                         ; We're going to use X as a pointer to temporary stack storage.
+    PHA                         ; $0102,X will contain our LCD flags.
+    LDA LCDWRITEBUFFER
+    PHA                         ; $0101,X will contain the character to write
+    TSX
     
-    LDA LCDWRITEBUFFER          ; store the high and low nibs in zeropage
-    LSR LCDWRITEBUFFER 
-    LSR LCDWRITEBUFFER
-    LSR LCDWRITEBUFFER
-    LSR LCDWRITEBUFFER          ; high nib
-    AND #$0F
-    STA LCDWRITEBUFFER+1        ; low nib
+    LDA $0101,X          
+    AND #$0F                    ; Get just the low nibble 
 
-    PLA ; get LCD flag
-    ORA LCDWRITEBUFFER
+    ORA $0102,X                 ; Add flags to the high nibble
     STA PORTB
     LDA #E
     TSB PORTB
-    TRB PORTB
+    TRB PORTB                   ; Toggle enable on and off
 
-    PLA ; get LCD flag
-    ORA LCDWRITEBUFFER+1
+    LDA $0101,X                 ; Get the character for the last time.
+    AND #$F0                    ; Get just the high nibs
+    LSR
+    LSR
+    LSR
+    LSR                         ; Move it to the low nibble
+
+    ORA $0102,X                 ; Add the flags onto the high nibble
     STA PORTB
     LDA #E
     TSB PORTB
-    TRB PORTB
+    TRB PORTB                   ; Toggle enable on and off
+
+    PLA                         ; Discard our temporary storage
+    PLA
+    PLX                         ; Restore original X
 
     RTS
 
