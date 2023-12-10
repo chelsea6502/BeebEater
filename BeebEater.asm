@@ -100,13 +100,9 @@ bootMessage:
     .byte $0C                   ; Start with a 'form feed' ASCII character. This clears the screen.
     .text "BeebEater Computer " ; Describes the computer system.
     .text "16K"                 ; 16k for 16 kilobytes of RAM available. Feel free to change it if you change your RAM capacity.
-    .byte $0A                   ; Give a one-line gap.
-    .byte $0D
+    .byte $0A, $0D              ; Give a one-line gap.
     .text "BASIC"
-    .byte $0A                   ; Give a one-line gap.
-    .byte $0D
-    .byte $07                   ; Send a bell character
-    .byte $00                   ; End with NUL
+    .byte $0A, $0D, $07, $00    ; One-line gap, then the 'bell' character, then end with NUL.
 
 ; -- Start of Program --
 
@@ -206,11 +202,13 @@ reset:
     
     STZ KEYBOARD_FLAGS          ; Initialise KEYBOARD_FLAGS to 0
 
+    ; Initialise the input buffer
+    STZ INPUTBUFFERREAD
+    STZ INPUTBUFFERWRITE
+    STZ INPUTBUFFER
     LDA #$08
     STA INPUTBUFFERREAD+1
     STA INPUTBUFFERWRITE+1
-
-    JSR flushBuffer
 
     ; To print characters, BBC BASIC uses the address stored in $020F-$020E. We need to load those addresses with our OSWRCH routine.
     LDA #>OSWRCHV               ; Get the high byte of the write character routine.
@@ -273,19 +271,6 @@ OSWRCHV:
     PLP                         ; Restore caller's interupt state.
     RTS
 
-
-flushBuffer:
-    LDX #0
-clearBufferLoop:
-    STZ INPUTBUFFER, X
-    INX
-    BNE clearBufferLoop 
-
-    STZ INPUTBUFFERREAD
-    STZ INPUTBUFFERWRITE
-
-    RTS
-
 ; OSBYTE: 'OS Byte'
 ; A group of system calls that only involve up to two bytes into the X and Y registers.
 ; Which system call to do is determined by whatever value is currently in the A register.
@@ -338,7 +323,6 @@ OSWORDV:
     PHP                         ; Preserve caller's IRQ state.
 	CLI	                        ; Enable Interrupts
 	
-    
 	STA	OSAREG                  ; Store A, X, and Y registers in MOS API workspace.
 	STX	OSXREG			
 	STY	OSYREG				
@@ -436,7 +420,9 @@ newLineAndExit:
     CLC
     RTS
 Escape:
-    JSR flushBuffer
+    STZ INPUTBUFFERREAD         ; Reset the input buffers
+    STZ INPUTBUFFERWRITE
+    STZ INPUTBUFFER
     PLP
     LDA OSESC                   ; Get escape flag
     ROL                         ; If the escape flag is set, also set the carry bit.
