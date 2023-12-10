@@ -533,7 +533,6 @@ keyboard_interrupt_exit:
 ; Before you send any instruction, you need to make sure the LCD isn't busy with the last instruction.
 ; You can check this by checking the 'busy flag' of the LCD. See the 'lcd_wait' routine for details.
 lcd_instruction:
-    JSR lcd_wait                ; Wait until the LCD is ready for another instruction.
     STA LCDWRITEBUFFER
     LDA #0
     JSR LCD_WRITE
@@ -727,7 +726,6 @@ lcd_print_backspace:
 
 
 print_ascii:
-    JSR lcd_wait
     STA LCDWRITEBUFFER
     LDA #RS
     JSR LCD_WRITE
