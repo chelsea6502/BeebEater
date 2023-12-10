@@ -220,16 +220,16 @@ reset:
 
     ; -- Print the boot message --
 
-    LDY #<bootMessage           ; Store the lower 4 bits of the boot message address into the Y register.
-    LDA #>bootMessage           ; Store the upper 4 bits of the address into the A register.
-    STA $FE                     ; Store the high byte of the source address.
-    STZ $FD                     ; Clear the low byte in memory.
+    LDA #>bootMessage           ; Store the location of the boot message into $FE-FD
+    STA $FE                     ; High nibble
+    LDA #<bootMessage           
+    STA $FD                     ; Low nibble
+    LDA ($FD)                   ; Read the first character
 printBootMessageLoop:
-    LDA ($FD),Y                 ; Read the character at $FE-$FD, offset by the value of Y.
     JSR OSASCI                  ; Send the character to the ACIA to transmit out of the 'Tx' pin.
-    INY                         ; Step to the next character.
-    CMP #0                      ; If we read a '0', that's when we stop reading the string.
-    BNE printBootMessageLoop    ;  If A is not 0, read the next character.
+    INC $FD                     ; Step to the next character.
+    LDA ($FD)                   ; Read the character at $FE-$FD
+    BNE printBootMessageLoop    ; If the value isn't zero, keep looping.
 
     ; -- Enter BBC BASIC --
 
