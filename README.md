@@ -85,7 +85,7 @@ If you have a standard Ben Eater 6502 memory mapping, everything is done for you
 
 If you want to make modifications to the code, you’ll need to assemble a new ROM using VASM. Use the following VASM flags to generate a new ROM:
 	
-`/PATH/TO/vasm/vasm6502_oldstyle -Fbin -dotdir ./BeebEater.asm -c02 -o ./BeebEaterNew.rom`
+`/PATH/TO/vasm/vasm6502_oldstyle -Fbin -dotdir ./BeebEater.asm -wdc02 -o ./BeebEaterNew.rom`
 
 # Emulator
 
