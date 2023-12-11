@@ -119,6 +119,7 @@ reset:
     STA DDRA
     LDA #%11111111              ; Set PORTB (for the LCD) to output.
     STA DDRB
+    LDA PORTA                   ; Clear the keyboard shift register
 
     ; Initialise the 'Auxiliary Control Register (ACR)'.
     ; Set the VIA timer to trigger an interrupt every 0.1 milliseconds (1 centisecond)
@@ -340,8 +341,6 @@ OSWORD0V:
     ; byte 2: maximum line length
     ; byte 3: minimum acceptable ASCII code
     ; byte 4: maximum acceptable ASCII code
-    LDA #0
-    STA (INPUTBUFFERREAD)
     LDY #4
 osword0setup:
     ; Store max/min ASCII codes, and max line length from zero page memory to main memory
