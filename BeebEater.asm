@@ -26,9 +26,6 @@ OSVDUWS=$0300
 ; For some, we'll set some aliases so it's easier to understand their purpose.
 READBUFFER      = OSKBD1        ; this stores the latest ASCII character that was sent into the ACIA
 KEYBOARD_FLAGS  = OSKBD2        ; This byte helps us keep track of the state of a key presses on the keyboard. See below.
-LCDBUFFER       = OSVDUWS       ; For storing a line of LCD characters.
-LCDREADBUFFER =   OSVDU
-LCDWRITEBUFFER = OSVDU+1
 
 INPUTBUFFER = $0800
 INPUTBUFFERREAD = $50
@@ -533,9 +530,10 @@ keyboard_interrupt_exit:
 ; Before you send any instruction, you need to make sure the LCD isn't busy with the last instruction.
 ; You can check this by checking the 'busy flag' of the LCD. See the 'lcd_wait' routine for details.
 lcd_instruction:
-    STA LCDWRITEBUFFER
+    PHA
     LDA #0
     JSR LCD_WRITE
+    PLA
     RTS                         ; Return to where we were before.
 
 ; Routine to keep the 6502 waiting until the LCD isn't busy anymore.
@@ -596,35 +594,33 @@ LCD_WRITE:
     JSR lcd_wait
 
     PHX                         ; We're going to use X as a pointer to temporary stack storage.
-    PHA                         ; $0102,X will contain our LCD flags.
-    LDA LCDWRITEBUFFER
-    PHA                         ; $0101,X will contain the character to write
+    PHA                         ; $0101,X will contain our LCD flags.
+                                ; $0104, X should contain the character
     TSX
     
-    LDA $0101,X          
+    LDA $0104,X       
     AND #$0F                    ; Get just the low nibble 
 
-    ORA $0102,X                 ; Add flags to the high nibble
+    ORA $0101,X                 ; Add flags to the high nibble
     STA PORTB
     LDA #E
     TSB PORTB
     TRB PORTB                   ; Toggle enable on and off
 
-    LDA $0101,X                 ; Get the character for the last time.
+    LDA $0104,X                 ; Get the character for the last time.
     AND #$F0                    ; Get just the high nibs
     LSR
     LSR
     LSR
     LSR                         ; Move it to the low nibble
 
-    ORA $0102,X                 ; Add the flags onto the high nibble
+    ORA $0101,X                 ; Add the flags onto the high nibble
     STA PORTB
     LDA #E
     TSB PORTB
     TRB PORTB                   ; Toggle enable on and off
 
     PLA                         ; Discard our temporary storage
-    PLA
     PLX                         ; Restore original X
 
     RTS
@@ -666,11 +662,11 @@ lcd_clear_screen:
 
 lcd_print_enter:
     ; Because the stack is First-in-last-out, we're going to store the second line in reverse.
-    LDA #%10100111              ; put cursor on the end of the second line (Position 40)
+    LDA #%10100111              ; put cursor on the end of the second line (Position 39)
     JSR lcd_instruction
     LDA #%00000001              ; Set entry mode to decrement
     JSR lcd_instruction
-    LDX #40                    ; Initialise a counter to help us keep track of where we are on the line
+    LDX #39                    ; Initialise a counter to help us keep track of where we are on the line
 lcd_print_enter_read_line_loop:
     JSR lcd_wait                ; Make sure the LCD isn't busy
     LDA #(RS | RW)              ; send instruction to read the current cursor in memory.
@@ -681,7 +677,7 @@ lcd_print_enter_read_line_loop:
 lcd_print_enter_clear:
     LDA #%00000001              ; Clear the display. 
     JSR lcd_instruction         ; This also puts the cursor at the start of line 1, and sets the entry mode back to increment.
-    LDX #40                    ; Re-initialise the counter
+    LDX #39                    ; Re-initialise the counter
 lcd_print_enter_write_line_loop:
     PLA                         ; Pull the character off the stack
     JSR print_char              ; Print it to the LCD
@@ -725,9 +721,10 @@ lcd_print_backspace:
 
 
 print_ascii:
-    STA LCDWRITEBUFFER
+    PHA
     LDA #RS
     JSR LCD_WRITE
+    PLA
 
     ; If we've used up all of the main view (16 characters), we need to shift the display along so we can still read what we are doing.
     JSR lcd_wait                ; Make sure the LCD isn't busy with the previous instruction.
