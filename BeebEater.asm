@@ -665,31 +665,30 @@ lcd_clear_screen:
     JMP exit_lcd                ; Leave early.
 
 lcd_print_enter:
-    LDA #%11000000              ; Put cursor at the start of the second line (Position 40)
+    ; Because the stack is First-in-last-out, we're going to store the second line in reverse.
+    LDA #%10100111              ; put cursor on the end of the second line (Position 40)
     JSR lcd_instruction
-    LDX #0                      ; Reset X
+    LDA #%00000001              ; Set entry mode to decrement
+    JSR lcd_instruction
+    LDX #40                    ; Initialise a counter to help us keep track of where we are on the line
 lcd_print_enter_read_line_loop:
     JSR lcd_wait                ; Make sure the LCD isn't busy
     LDA #(RS | RW)              ; send instruction to read the current cursor in memory.
     JSR lcd_read
-    STA LCDBUFFER,X             ; Store it into memory.
-    INX
-    CPX #$27
-    BCC lcd_print_enter_read_line_loop ; Keep going while we haven't hit the end of line 2 (Position 40 + $27).
+    PHA                         ; Put the character on the stack
+    DEX
+    BNE lcd_print_enter_read_line_loop ; Loop 40 times
 lcd_print_enter_clear:
-    LDA #%00000001              ; Clear the display
-    JSR lcd_instruction
-    LDX #0                      ; Reset X in preparation for the next loop.
+    LDA #%00000001              ; Clear the display. 
+    JSR lcd_instruction         ; This also puts the cursor at the start of line 1, and sets the entry mode back to increment.
+    LDX #40                    ; Re-initialise the counter
 lcd_print_enter_write_line_loop:
-    LDA LCDBUFFER,X             ; Load the next character from memory
+    PLA                         ; Pull the character off the stack
     JSR print_char              ; Print it to the LCD
-    STZ LCDBUFFER,X             ; Clear that space in memory, since we have already read it.
-    INX
-    CPX #$27 
-    BCC lcd_print_enter_write_line_loop ; Keep going while we haven't hit the end of line 1 (Position 0 + $27).
+    DEX
+    BNE lcd_print_enter_write_line_loop ; Loop 40 times
 
-    LDA #%11000000              ; Now that we're finished writing, let's set the cursor to the start of line 2.
-    JSR lcd_instruction
+    ; At this point we should be at the start of the second line
 
     JMP exit_lcd                ; We're done!
 
