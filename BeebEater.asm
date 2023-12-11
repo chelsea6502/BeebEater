@@ -27,7 +27,7 @@ OSVDUWS=$0300
 READBUFFER      = OSKBD1        ; this stores the latest ASCII character that was sent into the ACIA
 KEYBOARD_FLAGS  = OSKBD2        ; This byte helps us keep track of the state of a key presses on the keyboard. See below.
 
-INPUTBUFFER = $0800
+INPUTBUFFER = OSVDUWS
 INPUTBUFFERREAD = $50
 ; Keep $51 open
 INPUTBUFFERWRITE = $52
@@ -303,9 +303,9 @@ OSBYTE84:                       ; Routine to return the highest address of free 
     RTS
 
 OSBYTE83:                       ; Routine to return the lowest address of free RAM space.
-    ; Put address '$0900' in YX registers. 
-    ; Anything below $0800 is memory space reserved by BBC MOS. $0900-09FF is reserved for the input buffer.
-    LDY #$09                    ; High byte goes into Y
+    ; Put address '$0800' in YX registers. 
+    ; Anything below $0800 is memory space reserved by BBC MOS.
+    LDY #$08                    ; High byte goes into Y
     LDX #$00                    ; Low byte goes into X
     RTS
 
