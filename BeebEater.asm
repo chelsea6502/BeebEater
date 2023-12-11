@@ -12,8 +12,6 @@ START = $C000                   ; the entry point for BeebEater.
 ; See https://mdfs.net/Docs/Comp/BBC/AllMem for details.
 OSVDU  =$D0
 OSKBD1 =$EC
-OSKBD2 =OSKBD1+1
-OSKBD3 =OSKBD1+2
 OSAREG =$EF
 OSXREG =$F0
 OSYREG =$F1
@@ -24,10 +22,9 @@ TIME   =$0292                   ; A 5-byte memory location ($0292-$0296) that co
 OSVDUWS=$0300
 
 ; For some, we'll set some aliases so it's easier to understand their purpose.
-READBUFFER      = OSKBD1        ; this stores the latest ASCII character that was sent into the ACIA
-KEYBOARD_FLAGS  = OSKBD2        ; This byte helps us keep track of the state of a key presses on the keyboard. See below.
-
+KEYBOARD_FLAGS  = OSKBD1        ; This byte helps us keep track of the state of a key presses on the keyboard. See below.
 INPUTBUFFER = OSVDUWS
+
 INPUTBUFFERREAD = $50
 ; Keep $51 open
 INPUTBUFFERWRITE = $52
@@ -203,7 +200,7 @@ reset:
     STZ INPUTBUFFERREAD
     STZ INPUTBUFFERWRITE
     STZ INPUTBUFFER
-    LDA #$08
+    LDA #>INPUTBUFFER
     STA INPUTBUFFERREAD+1
     STA INPUTBUFFERWRITE+1
 
@@ -322,7 +319,7 @@ OSWORDV:
 	
 	STA	OSAREG                  ; Store A, X, and Y registers in MOS API workspace.
 	STX	OSXREG			
-	STY	OSYREG				
+	STY	OSYREG
 
     CMP #$00                    ; Is it the 'Read Line' system call?
     BEQ OSWORD0V                ; If yes, start reading input from the user.
@@ -343,7 +340,8 @@ OSWORD0V:
     ; byte 2: maximum line length
     ; byte 3: minimum acceptable ASCII code
     ; byte 4: maximum acceptable ASCII code
-    STZ READBUFFER              ; Clear the character buffer.
+    LDA #0
+    STA (INPUTBUFFERREAD)
     LDY #4
 osword0setup:
     ; Store max/min ASCII codes, and max line length from zero page memory to main memory
@@ -479,7 +477,7 @@ clear_right_shift:
     JMP keyboard_interrupt_exit ; Finished processing all released keys. Exit.
 
 handle_pressed_key:
-    ; Process what's in PORTA, and store it into READBUFFER for reading later.
+    ; Process what's in PORTA, and store it into the input buffer for reading later.
     LDA PORTA
     CMP #$F0                    ; If we've read $F0, that means the keyboard is signalling a key was released.
     BNE set_left_shift          ; If it's not a released key, skip ahead to shift checking
@@ -509,7 +507,8 @@ shifted_key:
     ; fall through...
 push_key:
     ; Now that we have the ASCII character stored in A, let's store it in READBUFFER for processing later.
-    STA READBUFFER              ; Store the ASCII into READBUFFER
+    STA (INPUTBUFFERWRITE)      ; Push to the input buffer
+    INC INPUTBUFFERWRITE
     CMP #$1B                    ; Is the character an escape character?
     BNE keyboard_interrupt_exit ; If not, we are done.
     SMB7 OSESC
