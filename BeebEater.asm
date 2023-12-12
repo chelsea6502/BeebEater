@@ -606,11 +606,10 @@ LCD_WRITE:
     TRB PORTB                   ; Toggle enable on and off
 
     LDA $0104,X                 ; Get the character for the last time.
-    AND #$F0                    ; Get just the high nibs
     LSR
     LSR
     LSR
-    LSR                         ; Move it to the low nibble
+    LSR                         ; Move the high nibble down
 
     ORA $0101,X                 ; Add the flags onto the high nibble
     STA PORTB
