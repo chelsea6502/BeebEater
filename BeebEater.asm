@@ -605,6 +605,8 @@ LCD_WRITE:
     TSB PORTB
     TRB PORTB                   ; Toggle enable on and off
 
+    ; [delay/lcdwait needed here?]
+
     LDA $0104,X                 ; Get the character for the last time.
     LSR
     LSR
