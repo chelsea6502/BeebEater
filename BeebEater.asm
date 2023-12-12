@@ -167,13 +167,14 @@ reset:
     JSR delay_100us ; Wait at least 100 microseconds (0.1 milliseconds)
 
     ; Step 4: Send a third and final '00000011'
-    ; At this point, we can now use 'lcd_instruction' to help us send an instruction.
-    LDA #%00000011
-    JSR lcd_instruction
+    TSB PORTB
+    TRB PORTB
+    JSR delay_100us ; Wait at least 100 microseconds (0.1 milliseconds)
 
     ; Step 5: Send '00000010' to indicate that we want to use 4-bit mode instead of 8-bit mode.
     LDA #%00000010 ; Send the instruction to set 4-bit mode. 
-    JSR lcd_instruction
+    STA PORTB
+    JSR delay_100us ; Wait at least 100 microseconds (0.1 milliseconds)
 
     ; --- LCD Initialisation ---
     
@@ -563,6 +564,8 @@ lcd_read:
     LDA #E
     TSB PORTB
 
+    JSR delay_100us
+
     LDA PORTB
     AND #%00001111
 
@@ -599,6 +602,8 @@ LCD_WRITE:
     LDA #E
     TSB PORTB
     TRB PORTB
+
+    JSR delay_100us
 
     PLA ; get LCD flag
     ORA LCDWRITEBUFFER+1
@@ -737,16 +742,22 @@ exit_lcd:
 
 ; Set A and Y such that microseconds = 9*(256*A+Y)+20. This is assuming a 1mhz clock.
 delay_15ms:
+    PHA
+    PHY
     LDA #6
     LDY #129
     JMP delay_loop
 
 delay_4100us:
+    PHA
+    PHY
     LDA #1
     LDY #198
     JMP delay_loop
 
 delay_100us:
+    PHA
+    PHY
     LDA #0
     LDY #9
     JMP delay_loop
@@ -756,6 +767,8 @@ delay_loop:
     DEY
     SBC  #0
     BCS  delay_loop
+    PLY
+    PLA
     RTS
 
 ; -- Interrupt Handling --
