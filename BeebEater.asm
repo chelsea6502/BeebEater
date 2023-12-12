@@ -2,6 +2,8 @@
 ; by Chelsea Wilkinson (chelsea6502)
 ; https://github.com/chelsea6502/BeebEater
 
+; WARNING: As of December 2023, LCD and Keyboard drivers are EXTREMELY BROKEN. It's hard to debug right now, as I have breadboard issues. Tie PORTA and PORTB to ground until I can get around to it in Jan/Feb. The serial terminal still works fine.
+
 ; -- Constants --
 
 ; First, let's set some addresses...
