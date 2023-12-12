@@ -18,8 +18,7 @@ _You can also try out BeebEater in an emulator without the need for hardware! Se
 > Consider BeebEater still in ALPHA until version v1.0 is released. Let me know of any issues you find by submitting a new issue in the "Issues" tab on this GitHub repo. If your issue is not already there, I don't know it exists yet. Thanks!
 
 > [!CAUTION]  
-> As of December 2023, LCD and Keyboard drivers are EXTREMELY BROKEN. It's hard to debug right now, as I have breadboard issues. Tie PORTA and PORTB to ground until I can get around to it in Jan/Feb. You may have better luck with earlier versions.
-> The serial should still work just fine, though.
+> As of December 2023, LCD and Keyboard drivers are EXTREMELY BROKEN. It's hard to debug right now, as I have breadboard issues. Tie PORTA and PORTB to ground until I can get around to it in Jan/Feb. The serial terminal still works fine.
 
 
 # Features
