@@ -164,7 +164,7 @@ reset:
     JSR delay_100us             ; Wait at least 100 microseconds (0.1 milliseconds)
 
     ; Step 4: Send a third and final '00000011'
-    ; At this point, we can now use 'lcd_instruction' to help us send an instruction.
+    ; [are you sure???] At this point, we can now use 'lcd_instruction' to help us send an instruction.
     LDA #%00000011
     JSR lcd_instruction
 
