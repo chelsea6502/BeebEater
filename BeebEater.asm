@@ -567,6 +567,8 @@ lcd_read:
     ASL
     STA $0101,X                 ; Store it
 
+		; delay needed here?
+
     LDA $0102,X                 ; Toggle the E bit on, with any flags we have set before
     STA PORTB
     LDA #E
